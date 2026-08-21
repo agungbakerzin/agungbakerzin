@@ -22,12 +22,12 @@
 // bersama.
 // ==========================================================================
 
+
 const firebaseConfig = {
-  apiKey: "AIzaSyDuGmtXwLAoi5LreJijcF1gMGNGeRhs__c",
-  authDomain: "apar-fss.firebaseapp.com",
-  projectId: "apar-fss",
-  storageBucket: "apar-fss.firebasestorage.app",
-  messagingSenderId: "118116318877",
-  appId: "1:118116318877:web:b7785c2a5e872b3dbf9e74",
-  measurementId: "G-0EEMCHHMLJ"
+  apiKey: "GANTI_API_KEY",
+  authDomain: "GANTI_AUTH_DOMAIN",
+  projectId: "GANTI_PROJECT_ID",
+  storageBucket: "GANTI_STORAGE_BUCKET",
+  messagingSenderId: "GANTI_SENDER_ID",
+  appId: "GANTI_APP_ID"
 };
