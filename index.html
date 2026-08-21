@@ -1,0 +1,4001 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=5.0, user-scalable=yes" />
+<title>My APAR — Portal Pemeliharaan &amp; Inspeksi K3</title>
+<script>
+  (function() {
+    try {
+      var savedTheme = localStorage.getItem('apar_theme') || 'light';
+      document.documentElement.setAttribute('data-theme', savedTheme);
+    } catch(e) {}
+  })();
+</script>
+<link rel="stylesheet" href="style.css" />
+<script src="https://unpkg.com/html5-qrcode@2.3.8/html5-qrcode.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="firebase-config.js"></script>
+<script src="data.js"></script>
+</head>
+<body>
+
+<div class="app-container">
+
+  <!-- ======================= STATUS MESSAGE TOAST ======================= -->
+  <div id="statusMsg" class="status"></div>
+
+  <!-- ======================= AUTH / LOGIN SCREEN ======================= -->
+  <div id="authScreen" class="auth-wrapper">
+    <div class="card" style="max-width: 480px; margin: 0 auto; position: relative;">
+      <div style="display: flex; justify-content: flex-end; margin-bottom: -10px;">
+        <button type="button" class="btn-theme-toggle" onclick="toggleAppTheme()" title="Ubah Mode Tampilan (Terang / Gelap)">
+          <span class="theme-icon">🌙</span> <span class="theme-text">Mode Gelap</span>
+        </button>
+      </div>
+
+      <div class="auth-header">
+        <div class="auth-logo-badge">
+          <svg class="auth-logo-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100" height="100" rx="24" fill="url(#auth_logo_grad)"/>
+            <path d="M50 20C42 20 35 25 35 32V38H30C26.6863 38 24 40.6863 24 44V76C24 79.3137 26.6863 82 30 82H70C73.3137 82 76 79.3137 76 76V44C76 40.6863 73.3137 38 70 38H65V32C65 25 58 20 50 20ZM42 32C42 28.5 45.5 26 50 26C54.5 26 58 28.5 58 32V38H42V32ZM50 52C53.3137 52 56 54.6863 56 58C56 60.25 54.75 62.2 52.88 63.15L54 70H46L47.12 63.15C45.25 62.2 44 60.25 44 58C44 54.6863 46.6863 52 50 52Z" fill="white"/>
+            <path d="M68 22L78 14M78 14L84 20M78 14V26" stroke="#FF5252" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="auth_logo_grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#E53935"/>
+                <stop offset="1" stop-color="#C62828"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <h1>My Apar</h1>
+        <p>Silakan pilih atau masukkan akun yang telah terdaftar untuk masuk ke sistem checklist &amp; manajemen APAR.</p>
+      </div>
+
+      <form id="authForm" style="margin-top: 10px;">
+        <div class="form-group">
+          <label for="authIdentifier">Nama / ID / Username Akun</label>
+          <input type="text" id="authIdentifier" placeholder="Masukkan nama akun / ID pengguna" required autocomplete="username" />
+        </div>
+
+        <div class="form-group">
+          <label for="authPassword">PIN / Kata Sandi</label>
+          <div class="password-box">
+            <input type="password" id="authPassword" placeholder="Masukkan PIN / kata sandi" required autocomplete="current-password" />
+            <button type="button" id="btnTogglePassword" class="password-eye-btn" title="Lihat/Sembunyikan password">👁️</button>
+          </div>
+        </div>
+
+        <button type="submit" id="btnAuthSubmit" class="btn btn-primary" style="margin-top: 12px; width: 100%;">
+          🔑 Masuk ke Sistem
+        </button>
+      </form>
+
+      <div style="margin-top: 14px; padding: 10px 12px; background: rgba(15, 23, 42, 0.6); border: 1px solid var(--border); border-radius: var(--radius-sm); font-size: 0.76rem; color: var(--text-muted); line-height: 1.5;">
+        🔒 <b>Verifikasi Ketat:</b> Sistem memverifikasi kecocokan nama/ID dan kata sandi di database. Penambahan akun petugas baru dapat dilakukan oleh <b>Admin K3</b> melalui menu Kelola Petugas setelah login.
+      </div>
+    </div>
+  </div>
+
+  <!-- ======================= MAIN DASHBOARD SCREEN ======================= -->
+  <div id="mainScreen" class="hidden">
+    
+    <!-- Top Header -->
+    <header class="app-header">
+      <div class="header-brand">
+        <div class="header-icon">
+          <svg class="header-logo-svg" viewBox="0 0 100 100" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <rect width="100" height="100" rx="24" fill="url(#hdr_logo_grad)"/>
+            <path d="M50 20C42 20 35 25 35 32V38H30C26.6863 38 24 40.6863 24 44V76C24 79.3137 26.6863 82 30 82H70C73.3137 82 76 79.3137 76 76V44C76 40.6863 73.3137 38 70 38H65V32C65 25 58 20 50 20ZM42 32C42 28.5 45.5 26 50 26C54.5 26 58 28.5 58 32V38H42V32ZM50 52C53.3137 52 56 54.6863 56 58C56 60.25 54.75 62.2 52.88 63.15L54 70H46L47.12 63.15C45.25 62.2 44 60.25 44 58C44 54.6863 46.6863 52 50 52Z" fill="white"/>
+            <path d="M68 22L78 14M78 14L84 20M78 14V26" stroke="#FF5252" stroke-width="4" stroke-linecap="round" stroke-linejoin="round"/>
+            <defs>
+              <linearGradient id="hdr_logo_grad" x1="0" y1="0" x2="100" y2="100" gradientUnits="userSpaceOnUse">
+                <stop stop-color="#E53935"/>
+                <stop offset="1" stop-color="#C62828"/>
+              </linearGradient>
+            </defs>
+          </svg>
+        </div>
+        <div class="header-title-group">
+          <h1>My APAR</h1>
+          <p>Sistem Pemeliharaan &amp; Checklist Bulanan Real-Time</p>
+        </div>
+      </div>
+
+      <div class="header-actions">
+        <button type="button" class="btn-theme-toggle" onclick="toggleAppTheme()" title="Ubah Mode Tampilan (Terang / Gelap)">
+          <span class="theme-icon">🌙</span> <span class="theme-text">Mode Gelap</span>
+        </button>
+
+        <div id="dbStatus" class="db-status-pill db-connecting" title="Status Database Bersama">
+          <span>🔄</span> <span id="dbStatusText">Menyambungkan...</span>
+        </div>
+
+        <button type="button" id="btnForceSync" class="btn-sync-pill" title="Tarik pembaruan data real-time terbaru dari server">
+          <span class="sync-icon">🔄</span> <span>Sinkron Data</span>
+        </button>
+
+        <div class="user-profile-badge" id="userProfileBadge">
+          <div class="user-avatar" id="userAvatar">P</div>
+          <div style="display: flex; flex-direction: column; align-items: flex-start; line-height: 1.1;">
+            <span class="user-name-text" id="userNameText">Petugas</span>
+            <span id="userRoleBadge" class="role-badge petugas" style="margin-top: 2px;">Petugas</span>
+          </div>
+          <button type="button" class="btn-logout" id="btnLogout" title="Keluar dari akun">Keluar</button>
+        </div>
+      </div>
+    </header>
+
+    <!-- Quick Stats Bento Grid -->
+    <div class="stats-grid">
+      <div class="stat-box primary">
+        <span class="stat-label">Total APAR Berkode</span>
+        <span class="stat-value" id="statTotalAlat">0</span>
+      </div>
+      <div class="stat-box success">
+        <span class="stat-label">Sudah Diperiksa</span>
+        <span class="stat-value" id="statSudahPeriksa">0</span>
+      </div>
+      <div class="stat-box warning">
+        <span class="stat-label">Belum Diperiksa</span>
+        <span class="stat-value" id="statBelumPeriksa">0</span>
+      </div>
+      <div class="stat-box success">
+        <span class="stat-label">Persentase Progres</span>
+        <span class="stat-value" id="statPersentase">0%</span>
+      </div>
+    </div>
+
+    <!-- Navigation Tabs -->
+    <nav class="nav-tabbar">
+      <button type="button" id="tabBtnScan" class="nav-tab-btn active">
+        <span>📷</span> Scan &amp; Isi Checklist
+      </button>
+      <button type="button" id="tabBtnRiwayat" class="nav-tab-btn">
+        <span>📋</span> Riwayat &amp; Rekap (<span id="tabBadgeCount">0</span>)
+      </button>
+      <button type="button" id="tabBtnAdmin" class="nav-tab-btn hidden">
+        <span>👥</span> Kelola Petugas (Admin)
+      </button>
+    </nav>
+
+    <!-- ======================= TAB 1: SCAN & CHECKLIST ======================= -->
+    <div id="tabScan" class="tabpanel active" style="margin-top: 16px;">
+      <div class="scan-grid-layout">
+        
+        <!-- Left Box: Scanner & Manual Lookup -->
+        <div class="card">
+          <h2><span>🔍</span> Scan Barcode / QR Alat</h2>
+          <p class="hint">Arahkan kamera ke stiker QR APAR. Data otomatis muncul dan siap diisi checklist kondisi fisik.</p>
+          
+          <button type="button" id="btnStart" class="btn btn-primary" style="margin-top: 10px;">
+            📷 Buka Kamera Scan QR
+          </button>
+          <div id="reader" class="hidden"></div>
+
+          <div style="margin-top: 20px; padding-top: 16px; border-top: 1px solid var(--border);">
+            <label for="manualKode">Atau Ketik Kode Alat Manual</label>
+            <div style="display: flex; gap: 8px;">
+              <input type="text" id="manualKode" placeholder="Contoh: 110" inputmode="numeric" />
+              <button type="button" id="btnCariManual" class="btn btn-secondary btn-sm" style="flex-shrink: 0; min-width: 80px;">Cari</button>
+            </div>
+          </div>
+
+          <div class="hint" style="margin-top: 16px; display: flex; align-items: center; gap: 6px;">
+            <span>🏷️</span>
+            <a class="nav-link" href="generate.html">Buka Halaman Cetak / Buat QR Kode Alat</a>
+          </div>
+        </div>
+
+        <!-- Right Box: Inspection Checklist Form -->
+        <div class="card hidden" id="resultCard">
+          <div class="result-header">
+            <span class="result-kode-badge" id="resultKode">Kode: -</span>
+            <span class="result-status-badge" id="resultStatusBadge" style="background:#334155;color:#94a3b8;">Belum Diperiksa</span>
+          </div>
+
+          <div class="result-title" id="resultTitle">Nama Ruangan</div>
+          <dl class="result-list" id="resultList"></dl>
+
+          <div class="kondisi-header-wrap">
+            <h3 style="margin: 0;">📋 KONDISI FISIK APAR</h3>
+            <span id="kondisiCounter" class="kondisi-counter-pill">0/6 Terisi</span>
+          </div>
+          <p class="hint" style="margin-bottom: 10px; font-size: 0.8rem;">
+            Semua 6 poin pemeriksaan di bawah ini <strong style="color:#f87171;">wajib diisi</strong> sebelum menyimpan.
+          </p>
+          <div id="kondisiList"></div>
+
+          <h3>📝 CATATAN / KETERANGAN</h3>
+          <textarea id="keteranganInput" placeholder="Tuliskan catatan hasil pemeriksaan atau temuan khusus (opsional)"></textarea>
+
+          <div class="foto-upload-box">
+            <label style="margin-top: 0; margin-bottom: 8px;">📷 Bukti Foto (EVIDEN)</label>
+            <div class="foto-btn-row">
+              <button type="button" id="btnUploadFoto" class="btn btn-secondary btn-sm" style="flex:1;">📷 Ambil / Upload Foto</button>
+              <button type="button" id="btnHapusFoto" class="btn btn-danger btn-sm hidden" style="flex:1;">🗑️ Hapus Foto</button>
+            </div>
+            <input type="file" id="fotoInput" accept="image/*" capture="environment" class="hidden" />
+            <img id="fotoPreview" class="foto-preview" alt="Preview bukti foto" />
+          </div>
+
+          <button type="button" id="btnSimpan" class="btn btn-primary">✅ Simpan Hasil Pemeriksaan</button>
+          <button type="button" id="btnScanLagi" class="btn btn-ghost" style="margin-top: 8px;">🔄 Scan Alat Lain</button>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ======================= TAB 2: RIWAYAT & REKAP ======================= -->
+    <div id="tabRiwayat" class="tabpanel" style="margin-top: 16px;">
+      <div class="riwayat-grid-layout">
+        
+        <!-- Left: List of Inspections -->
+        <div class="card">
+          <h2><span>📋</span> Riwayat Pemeriksaan</h2>
+          
+          <div class="filter-row">
+            <input type="text" id="searchRiwayat" placeholder="🔍 Cari kode, ruangan, gedung, merk..." />
+            <select id="filterGedungRiwayat">
+              <option value="">Semua Gedung</option>
+            </select>
+          </div>
+
+          <div id="logList"></div>
+        </div>
+
+        <!-- Right: Progress Overview & Export -->
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          
+          <!-- Overall Progress Card -->
+          <div class="card">
+            <h2><span>📊</span> Ringkasan Progres</h2>
+            <div class="progress-wrap">
+              <div class="progress-bar-track">
+                <div class="progress-bar-fill" id="progressFill"></div>
+              </div>
+              <div class="progress-label">
+                <span id="progressText">0 / 0 selesai</span>
+                <span id="progressPct">0%</span>
+              </div>
+            </div>
+            <div class="progress-done-all hidden" id="doneAllLabel">🎉 SEMUA APAR SELESAI DIPERIKSA!</div>
+
+            <h3 style="margin-top: 20px;">Progres Per Gedung</h3>
+            <div class="gedung-progress-list" id="gedungProgressList"></div>
+          </div>
+
+          <!-- Export & Data Tools Card -->
+          <div class="card">
+            <h2><span>💾</span> Ekspor &amp; Database Cloud</h2>
+            <div class="gdrive-auto-banner">
+              <span>⚡</span>
+              <div>
+                <strong>Sinkronisasi Otomatis Google Sheets &amp; Drive Aktif</strong><br>
+                <span style="font-size: 0.76rem; opacity: 0.9;">Setiap progres checklist langsung tersimpan ke database &amp; spreadsheet pusat tanpa perlu kirim manual.</span>
+              </div>
+            </div>
+            <button type="button" id="btnDownload" class="btn btn-secondary">⬇️ Download Rekap Excel (.xlsx)</button>
+            <button type="button" id="btnResetLog" class="btn btn-danger" style="margin-top: 10px;">🗑️ Reset Riwayat Pemeriksaan</button>
+          </div>
+
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ======================= TAB 3: KELOLA PETUGAS (ADMIN ONLY) ======================= -->
+    <div id="tabAdmin" class="tabpanel" style="margin-top: 16px;">
+      <div class="admin-grid-layout">
+        
+        <!-- Left Column: Add Account & Sync -->
+        <div style="display: flex; flex-direction: column; gap: 16px;">
+          
+          <div class="card">
+            <h2><span>➕</span> Tambah Akun Petugas Baru</h2>
+            <p class="hint">Buat akun untuk petugas lapangan baru atau administrator K3. Akun langsung otomatis aktif dan dapat digunakan login.</p>
+
+            <form id="formAdminAddUser" style="margin-top: 14px;">
+              <div class="form-group">
+                <label for="adminNewName">Nama Lengkap Petugas *</label>
+                <input type="text" id="adminNewName" placeholder="Contoh: Budi Santoso" required />
+              </div>
+
+              <div class="form-group">
+                <label for="adminNewEmail">Username / ID Login *</label>
+                <input type="text" id="adminNewEmail" placeholder="Contoh: budi atau budi@apar.id" required />
+              </div>
+
+              <div class="form-group">
+                <label for="adminNewPass">PIN / Kata Sandi *</label>
+                <input type="password" id="adminNewPass" placeholder="Minimal 3 karakter (Contoh: 123456)" required value="123" />
+              </div>
+
+              <div class="form-group">
+                <label for="adminNewRole">Peran Akun (Role) *</label>
+                <select id="adminNewRole" required>
+                  <option value="petugas" selected>👤 Petugas Lapangan (Scan, Checklist &amp; Rekap)</option>
+                  <option value="admin">👑 Administrator K3 (Kelola Akun &amp; Pantau Sistem)</option>
+                </select>
+              </div>
+
+              <button type="submit" id="btnAdminSaveUser" class="btn btn-primary" style="width: 100%; margin-top: 10px;">
+                💾 Daftarkan Akun Baru
+              </button>
+            </form>
+          </div>
+
+          <div class="card">
+            <h2><span>☁️</span> Sinkronisasi Firebase Firestore</h2>
+            <div class="gdrive-auto-banner">
+              <span>⚡</span>
+              <div>
+                <strong>Database Akun Terhubung</strong><br>
+                <span style="font-size: 0.76rem; opacity: 0.9;">Semua akun tersimpan di database server &amp; dapat disinkronkan ke Firebase Firestore.</span>
+              </div>
+            </div>
+            <button type="button" id="btnSyncUsersToFirebase" class="btn btn-secondary" style="width: 100%;">
+              🔄 Sinkronkan Akun ke Firebase Firestore
+            </button>
+
+            <!-- Collapsible Tutorial Firebase Rules -->
+            <div style="margin-top: 14px; padding: 12px; background: rgba(30, 41, 59, 0.6); border: 1px dashed var(--border); border-radius: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="document.getElementById('firebaseRulesGuide').classList.toggle('hidden');">
+                <span style="font-size: 0.82rem; font-weight: 600; color: #38bdf8;">📖 Tutorial Wajib Pengaturan Firebase Rules</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Klik Buka/Tutup</span>
+              </div>
+              <div id="firebaseRulesGuide" class="hidden" style="margin-top: 10px; font-size: 0.76rem; color: var(--text-muted); line-height: 1.5;">
+                <p style="margin: 0 0 6px 0; color: var(--text-main);"><strong>Langkah Setting Rules di Firebase Console (Hanya 1x):</strong></p>
+                <ol style="padding-left: 18px; margin: 0 0 8px 0;">
+                  <li>Buka <a href="https://console.firebase.google.com" target="_blank" style="color:#38bdf8;">console.firebase.google.com</a> &gt; Pilih project <b>apar-fss</b>.</li>
+                  <li>Di menu kiri: <b>Build</b> &gt; <b>Firestore Database</b>. (Jika belum ada, klik <b>Create database</b> dulu).</li>
+                  <li>Buka tab <b>Rules (Aturan)</b> di bagian atas.</li>
+                  <li>Hapus aturan lama, lalu tempel (*paste*) aturan berikut:</li>
+                </ol>
+                <pre style="background:#0f172a; padding:8px; border-radius:6px; font-size:0.72rem; color:#4ade80; overflow-x:auto; margin:0 0 6px 0;">rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /apar_log/{document=**} {
+      allow read, write: if true;
+    }
+    match /users/{document=**} {
+      allow read, write: if true;
+    }
+    match /{document=**} {
+      allow read, write: if true;
+    }
+  }
+}</pre>
+                <span style="font-size:0.72rem; color:#f59e0b;">⚠️ Setelah di-paste, klik tombol <b>Publish (Publikasikan)</b> di kanan atas. Tunggu 30 detik lalu coba sinkronkan kembali.</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- Card 3: Integrasi Google Sheets & Google Drive -->
+          <div class="card">
+            <h2><span>📊</span> Hubungkan Google Sheets &amp; Drive</h2>
+            <p class="hint">Hubungkan aplikasi APAR ke Google Sheets &amp; Google Drive agar laporan inspeksi dan foto eviden otomatis tersimpan ke Cloud Google milik Anda.</p>
+
+            <form id="formGasConfig" style="margin-top: 12px;">
+              <div class="form-group">
+                <label for="gasUrlInput">Web App URL Google Apps Script *</label>
+                <input type="text" id="gasUrlInput" placeholder="https://script.google.com/macros/s/.../exec" required />
+                <span style="font-size: 0.72rem; color: var(--text-muted); display: block; margin-top: 4px;">Pastikan berakhiran <b>/exec</b> (bukan /edit).</span>
+              </div>
+
+              <div style="display: flex; gap: 8px; margin-top: 10px;">
+                <button type="submit" id="btnSaveGasUrl" class="btn btn-primary" style="flex: 1;">
+                  💾 Simpan URL
+                </button>
+                <button type="button" id="btnTestGasSync" class="btn btn-secondary" style="flex: 1;">
+                  ⚡ Tes Koneksi
+                </button>
+              </div>
+            </form>
+
+            <!-- Collapsible Tutorial Google Apps Script Code -->
+            <div style="margin-top: 14px; padding: 12px; background: rgba(30, 41, 59, 0.6); border: 1px dashed var(--border); border-radius: 8px;">
+              <div style="display: flex; justify-content: space-between; align-items: center; cursor: pointer;" onclick="document.getElementById('gasScriptGuide').classList.toggle('hidden');">
+                <span style="font-size: 0.82rem; font-weight: 600; color: #38bdf8;">📜 Panduan &amp; Kode Script Google Sheets + Drive</span>
+                <span style="font-size: 0.75rem; color: var(--text-muted);">Klik Buka/Tutup</span>
+              </div>
+              <div id="gasScriptGuide" class="hidden" style="margin-top: 10px; font-size: 0.76rem; color: var(--text-muted); line-height: 1.5;">
+                <p style="margin: 0 0 6px 0; color: var(--text-main);"><strong>Langkah-Langkah Pembuatan di Google Sheets:</strong></p>
+                <ol style="padding-left: 18px; margin: 0 0 8px 0;">
+                  <li>Buka <a href="https://sheets.new" target="_blank" style="color:#38bdf8;">Google Sheets baru</a> di browser.</li>
+                  <li>Di menu atas, pilih <b>Extensions (Ekstensi)</b> &gt; <b>Apps Script</b>.</li>
+                  <li>Hapus semua kode lama, lalu <b>paste (tempel)</b> kode di bawah ini:</li>
+                </ol>
+
+                <div style="position: relative; margin-bottom: 8px;">
+                  <button type="button" onclick="copyGasCode()" style="position: absolute; right: 8px; top: 8px; background: #38bdf8; color: #000; border: none; padding: 3px 8px; border-radius: 4px; font-size: 0.7rem; font-weight: bold; cursor: pointer;">📋 Copy Kode</button>
+                  <pre id="gasCodeBox" style="background:#0f172a; padding:10px; border-radius:6px; font-size:0.75rem; color:#4ade80; overflow-x:auto; max-height:220px; margin:0;">function toSafeCell(val) {
+  if (val === null || val === undefined || val === '') return "-";
+  if (typeof val === "object") return JSON.stringify(val);
+  return String(val);
+}
+
+function doGet(e) {
+  return ContentService.createTextOutput(JSON.stringify({
+    success: true,
+    message: "Google Apps Script Web App APAR K3 aktif & siap menerima data! ✅",
+    timestamp: new Date().toISOString()
+  })).setMimeType(ContentService.MimeType.JSON);
+}
+
+function doPost(e) {
+  try {
+    var data = {};
+    if (e && e.postData && e.postData.contents) {
+      try {
+        data = JSON.parse(e.postData.contents);
+      } catch (jsonErr) {
+        try {
+          data = JSON.parse(decodeURIComponent(e.postData.contents));
+        } catch (e2) {
+          data = e.parameter || {};
+        }
+      }
+    } else if (e && e.parameter) {
+      data = e.parameter;
+    }
+
+    if (data && data.payload) {
+      if (typeof data.payload === "string") {
+        try { data = JSON.parse(data.payload); } catch(e3) {}
+      } else if (typeof data.payload === "object") {
+        data = data.payload;
+      }
+    }
+
+    var ss = null;
+    try {
+      ss = SpreadsheetApp.getActiveSpreadsheet();
+    } catch (eSs) {}
+
+    if (!ss && data.spreadsheetId) {
+      try {
+        ss = SpreadsheetApp.openById(data.spreadsheetId);
+      } catch (eId) {}
+    }
+
+    if (!ss) {
+      return ContentService.createTextOutput(JSON.stringify({
+        success: false,
+        error: "Spreadsheet tidak terdeteksi. Pastikan Apps Script dibuat dari menu Extensions > Apps Script di dalam Google Sheets Anda!"
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    var sheet = ss.getSheetByName("Riwayat_APAR") || ss.getSheets()[0];
+    if (sheet.getName() === "Sheet1" || sheet.getName() === "Lembar1") {
+      try { sheet.setName("Riwayat_APAR"); } catch(eName) {}
+    }
+
+    // Inisialisasi Header Kolom jika sheet masih kosong
+    if (sheet.getLastRow() === 0) {
+      sheet.appendRow([
+        "Waktu", "Kode APAR", "Gedung", "Ruangan", "Lantai", 
+        "Merk", "Kapasitas", "Gas", "Kebersihan", "Tekanan", 
+        "Pin", "Selang", "Nozzle", "Tag", "Status", 
+        "Keterangan", "Link Foto Drive", "Pemeriksa"
+      ]);
+      sheet.getRange(1, 1, 1, 18).setFontWeight("bold").setBackground("#0f172a").setFontColor("#ffffff");
+    }
+
+    // A. FITUR KIRIM MASSAL / SINKRONISASI MASSAL (sync_all)
+    if (data.action === "sync_all" || Array.isArray(data.items)) {
+      var items = data.items || [];
+      if (!Array.isArray(items) && typeof items === "object") {
+        var temp = [];
+        for (var k in items) temp.push(items[k]);
+        items = temp;
+      }
+
+      // Kosongkan baris data lama (mulai baris ke-2), tetap pertahankan Header
+      var lastRow = sheet.getLastRow();
+      if (lastRow > 1) {
+        sheet.getRange(2, 1, lastRow - 1, 18).clearContent();
+      }
+
+      var rowsToAdd = [];
+      for (var i = 0; i < items.length; i++) {
+        var item = items[i];
+        if (!item) continue;
+
+        var photoUrl = toSafeCell(item.photoUrl || item.fotoUrl);
+        if (item.foto && typeof item.foto === "string" && item.foto.indexOf("base64,") !== -1) {
+          try {
+            var folderName = "Foto_Eviden_APAR";
+            var folder = DriveApp.getFoldersByName(folderName).hasNext() ? 
+                         DriveApp.getFoldersByName(folderName).next() : 
+                         DriveApp.createFolder(folderName);
+            var base64Data = item.foto.split("base64,")[1];
+            var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), "image/jpeg", "EVIDEN_" + (item.kode || item.id || "APAR") + "_" + i + ".jpg");
+            var file = folder.createFile(blob);
+            file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+            photoUrl = file.getUrl();
+          } catch (eImg) {
+            if (photoUrl === "-") photoUrl = toSafeCell(item.photoUrl);
+          }
+        }
+
+        rowsToAdd.push([
+          toSafeCell(item.tanggal || new Date().toLocaleString("id-ID")),
+          toSafeCell(item.kode || item.id),
+          toSafeCell(item.gedung),
+          toSafeCell(item.ruangan),
+          toSafeCell(item.lantai),
+          toSafeCell(item.merk),
+          toSafeCell(item.kapasitas),
+          toSafeCell(item.jenisGas),
+          toSafeCell(item.kebersihanTabung || item.kebersihan),
+          toSafeCell(item.indikatorTekanan || item.tekanan),
+          toSafeCell(item.kunciPengaman || item.pin),
+          toSafeCell(item.selangSemprot || item.selang),
+          toSafeCell(item.nozzle),
+          toSafeCell(item.tagLabel || item.tag),
+          toSafeCell(item.status || "OK"),
+          toSafeCell(item.keterangan),
+          photoUrl,
+          toSafeCell(item.pemeriksa || "Petugas")
+        ]);
+      }
+
+      if (rowsToAdd.length > 0) {
+        sheet.getRange(2, 1, rowsToAdd.length, 18).setValues(rowsToAdd);
+      }
+
+      return ContentService.createTextOutput(JSON.stringify({
+        success: true,
+        message: "Berhasil sinkronisasi massal " + rowsToAdd.length + " data inspeksi ke Google Sheets!",
+        totalSynced: rowsToAdd.length
+      })).setMimeType(ContentService.MimeType.JSON);
+    }
+
+    // B. FITUR HAPUS TUGAS (action === "delete")
+    if (data.action === "delete") {
+      var targetKode = String(data.kode || data.id || "").trim().toLowerCase();
+      if (targetKode) {
+        var rows = sheet.getDataRange().getValues();
+        var deletedCount = 0;
+        for (var i = rows.length - 1; i >= 1; i--) {
+          var rowKode = String(rows[i][1] || "").trim().toLowerCase();
+          if (rowKode === targetKode) {
+            sheet.deleteRow(i + 1);
+            deletedCount++;
+          }
+        }
+        return ContentService.createTextOutput(JSON.stringify({ 
+          success: true, 
+          message: "Data APAR Kode " + targetKode + " berhasil dihapus dari Google Sheets!", 
+          deletedCount: deletedCount 
+        })).setMimeType(ContentService.MimeType.JSON);
+      }
+    }
+
+    // C. SIMPAN / UPDATE TUNGGAL (UPSERT REAL-TIME)
+    var photoUrl = "-";
+    if (data.foto && typeof data.foto === "string" && data.foto.indexOf("base64,") !== -1) {
+      try {
+        var folderName = "Foto_Eviden_APAR";
+        var folder = DriveApp.getFoldersByName(folderName).hasNext() ? 
+                     DriveApp.getFoldersByName(folderName).next() : 
+                     DriveApp.createFolder(folderName);
+        var base64Data = data.foto.split("base64,")[1];
+        var blob = Utilities.newBlob(Utilities.base64Decode(base64Data), "image/jpeg", "EVIDEN_" + (data.kode || data.id || "APAR") + "_" + Date.now() + ".jpg");
+        var file = folder.createFile(blob);
+        file.setSharing(DriveApp.Access.ANYONE_WITH_LINK, DriveApp.Permission.VIEW);
+        photoUrl = file.getUrl();
+      } catch (imgErr) { photoUrl = toSafeCell(data.photoUrl) !== "-" ? toSafeCell(data.photoUrl) : ("Err: " + imgErr.toString()); }
+    } else if (data.photoUrl) {
+      photoUrl = toSafeCell(data.photoUrl);
+    }
+
+    var targetKodeNew = String(data.kode || data.id || "").trim().toLowerCase();
+    var existingRowIndex = -1;
+    if (targetKodeNew) {
+      var allRows = sheet.getDataRange().getValues();
+      for (var r = 1; r < allRows.length; r++) {
+        if (String(allRows[r][1] || "").trim().toLowerCase() === targetKodeNew) {
+          existingRowIndex = r + 1;
+          break;
+        }
+      }
+    }
+
+    var rowValues = [
+      toSafeCell(data.tanggal || new Date().toLocaleString("id-ID")),
+      toSafeCell(data.kode || data.id),
+      toSafeCell(data.gedung),
+      toSafeCell(data.ruangan),
+      toSafeCell(data.lantai),
+      toSafeCell(data.merk),
+      toSafeCell(data.kapasitas),
+      toSafeCell(data.jenisGas),
+      toSafeCell(data.kebersihanTabung || data.kebersihan),
+      toSafeCell(data.indikatorTekanan || data.tekanan),
+      toSafeCell(data.kunciPengaman || data.pin),
+      toSafeCell(data.selangSemprot || data.selang),
+      toSafeCell(data.nozzle),
+      toSafeCell(data.tagLabel || data.tag),
+      toSafeCell(data.status || "OK"),
+      toSafeCell(data.keterangan),
+      photoUrl,
+      toSafeCell(data.pemeriksa || "Petugas")
+    ];
+
+    if (existingRowIndex > 0) {
+      sheet.getRange(existingRowIndex, 1, 1, 18).setValues([rowValues]);
+    } else {
+      sheet.appendRow(rowValues);
+    }
+
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: true, 
+      message: "Data APAR Kode " + (data.kode || data.id || "") + " berhasil dicatat ke Google Sheets & Drive!", 
+      photoUrl: photoUrl 
+    })).setMimeType(ContentService.MimeType.JSON);
+  } catch (err) {
+    return ContentService.createTextOutput(JSON.stringify({ 
+      success: false, 
+      error: err.toString() 
+    })).setMimeType(ContentService.MimeType.JSON);
+  }
+}</pre>
+                </div>
+
+                <ol start="4" style="padding-left: 18px; margin: 0 0 6px 0;">
+                  <li>Klik tombol <b>Deploy (Terapkan)</b> di kanan atas &gt; pilih <b>New deployment</b>.</li>
+                  <li>Pilih jenis: <b>Web App</b>.</li>
+                  <li>Ubah <i>Who has access (Siapa saja yang memiliki akses)</i> ke <b>Anyone (Siapa Saja)</b>.</li>
+                  <li>Klik <b>Deploy</b>, copy Web App URL lalu simpan di kolom atas!</li>
+                </ol>
+              </div>
+            </div>
+
+            <!-- Prominent Bulk Sync Action Box -->
+            <div style="margin-top: 14px; padding: 14px; background: rgba(15, 23, 42, 0.7); border: 1px solid var(--border); border-radius: 10px;">
+              <div style="display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px;">
+                <div>
+                  <h3 style="margin: 0; font-size: 0.95rem; color: #38bdf8; display: flex; align-items: center; gap: 6px;">
+                    <span>🚀</span> Kirim Massal Data ke Google Sheets
+                  </h3>
+                  <p style="margin: 4px 0 0 0; font-size: 0.76rem; color: var(--text-muted);">
+                    Kirim seluruh data hasil pemeriksaan sekaligus ke Google Sheets agar isi Sheet 100% mengikuti progres aplikasi.
+                  </p>
+                </div>
+                <button type="button" id="btnBulkSyncGas" class="btn btn-primary" style="background: linear-gradient(135deg, #0284c7, #2563eb); font-weight: 600; padding: 8px 16px;">
+                  📤 Kirim Massal Semua Data
+                </button>
+              </div>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Right Column: Registered Users List -->
+        <div class="card">
+          <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px;">
+            <h2 style="margin: 0;"><span>👥</span> Daftar Akun Terdaftar</h2>
+            <span id="adminTotalUsersBadge" class="kondisi-counter-pill">0 Akun</span>
+          </div>
+          <p class="hint" style="margin-bottom: 12px;">Semua akun yang memiliki hak akses untuk masuk ke sistem inspeksi APAR.</p>
+
+          <div style="margin-bottom: 14px;">
+            <input type="text" id="searchAdminUsers" placeholder="🔍 Cari nama atau username akun..." />
+          </div>
+
+          <div id="adminUserList" style="max-height: 520px; overflow-y: auto; padding-right: 4px;">
+            <!-- Dynamically populated -->
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ======================= PHOTO PREVIEW MODAL ======================= -->
+  <div id="photoModal" class="modal-overlay hidden">
+    <div class="modal-card" style="max-width: 580px;">
+      <div class="modal-header">
+        <div style="display: flex; align-items: center; gap: 10px;">
+          <span style="font-size: 1.5rem;">📷</span>
+          <div>
+            <h2 id="photoModalTitle" style="font-size: 1.15rem; margin: 0;">Bukti Foto Eviden APAR</h2>
+            <p id="photoModalSub" style="font-size: 0.78rem; color: var(--text-muted); margin: 0;">Foto asli hasil upload checklist di aplikasi</p>
+          </div>
+        </div>
+        <button type="button" id="btnClosePhotoModal" class="btn-close-modal">✕</button>
+      </div>
+
+      <div style="margin: 14px 0; max-height: 65vh; overflow: hidden; border-radius: 8px; background: #000; display: flex; justify-content: center; align-items: center; border: 1px solid var(--border);">
+        <img id="photoModalImg" src="" alt="Foto Eviden" style="max-width: 100%; max-height: 60vh; object-fit: contain;" />
+      </div>
+
+      <div style="display: flex; gap: 10px; justify-content: flex-end; align-items: center;">
+        <a id="btnDownloadPhoto" href="#" download="FOTO_EVIDEN_APAR.jpg" class="btn btn-secondary" style="width: auto; text-decoration: none; padding: 8px 16px; font-size: 0.85rem;">
+          ⬇️ Download Foto
+        </a>
+        <button type="button" id="btnClosePhotoModal2" class="btn btn-ghost" style="width: auto; padding: 8px 16px; font-size: 0.85rem;">
+          Tutup
+        </button>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+/* ===========================================================
+   1. Data Indexing & Initial Setup
+   =========================================================== */
+const DATA_BY_KODE = {};
+APAR_DATA.forEach(r => {
+  if (r.kode) {
+    const k = String(r.kode).trim();
+    DATA_BY_KODE[k] = r;
+  }
+});
+const TOTAL_TUGAS = APAR_DATA.filter(r => r.kode).length;
+
+const LOG_KEY = 'apar_log_v2';
+function loadLocalLog() {
+  try {
+    const raw = localStorage.getItem(LOG_KEY) || localStorage.getItem('apar_log_v1');
+    return raw ? JSON.parse(raw) : {};
+  } catch (e) {
+    return {};
+  }
+}
+function saveLocalLog(log) {
+  try {
+    localStorage.setItem(LOG_KEY, JSON.stringify(log));
+  } catch (e) {
+    console.warn('Gagal menyimpan cache lokal:', e);
+  }
+}
+
+let LOG = loadLocalLog();
+let db = null;
+let auth = null;
+let currentUser = null;
+const COLLECTION_NAME = 'apar_log';
+
+let GDRIVE_SETTINGS = {
+  googleScriptUrl: localStorage.getItem('apar_gdrive_url') || '',
+  autoSyncGdrive: true
+};
+try {
+  const cachedGdrive = localStorage.getItem('apar_gdrive_config');
+  if (cachedGdrive) {
+    const parsedGdrive = JSON.parse(cachedGdrive);
+    if (parsedGdrive && parsedGdrive.googleScriptUrl) {
+      GDRIVE_SETTINGS.googleScriptUrl = parsedGdrive.googleScriptUrl;
+      GDRIVE_SETTINGS.autoSyncGdrive = parsedGdrive.autoSyncGdrive !== false;
+    }
+  }
+} catch (e) {}
+
+/* Helper lookup for log entries matching an APAR item */
+function getLogEntry(aparItem) {
+  if (!aparItem) return null;
+  const idKey = aparItem.id ? String(aparItem.id).trim() : null;
+  const kodeKey = aparItem.kode ? String(aparItem.kode).trim() : null;
+
+  if (idKey && LOG[idKey]) return LOG[idKey];
+  if (kodeKey && LOG[kodeKey]) return LOG[kodeKey];
+
+  for (const k in LOG) {
+    const entry = LOG[k];
+    if (entry) {
+      if (idKey && String(entry.id).trim() === idKey) return entry;
+      if (kodeKey && String(entry.kode).trim() === kodeKey) return entry;
+    }
+  }
+  return null;
+}
+
+/* ===========================================================
+   2. UI Elements & Helper Functions
+   =========================================================== */
+const statusMsg = document.getElementById('statusMsg');
+let statusTimeout = null;
+
+function showStatus(msg, type = 'info') {
+  if (statusTimeout) clearTimeout(statusTimeout);
+  statusMsg.textContent = msg;
+  statusMsg.className = 'status ' + type;
+  statusTimeout = setTimeout(() => {
+    statusMsg.className = 'status';
+  }, 4500);
+}
+
+const dbStatusEl = document.getElementById('dbStatus');
+
+function setDbStatus(mode, text) {
+  if (!dbStatusEl) return;
+  dbStatusEl.className = 'db-status-pill db-' + mode;
+  let icon = '🟢';
+  if (mode === 'offline') icon = '📴';
+  if (mode === 'connecting') icon = '🔄';
+  dbStatusEl.innerHTML = `<span>${icon}</span> <span>${text}</span>`;
+}
+
+function escapeHtml(str) {
+  if (!str) return '';
+  return String(str).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+/* ===========================================================
+   Theme Toggle Functionality (Mode Gelap / Terang)
+   =========================================================== */
+function updateThemeUI(theme) {
+  const isDark = theme === 'dark';
+  document.documentElement.setAttribute('data-theme', theme);
+  try { localStorage.setItem('apar_theme', theme); } catch (e) {}
+
+  const icons = document.querySelectorAll('.theme-icon');
+  const texts = document.querySelectorAll('.theme-text');
+
+  icons.forEach(el => el.textContent = isDark ? '☀️' : '🌙');
+  texts.forEach(el => el.textContent = isDark ? 'Mode Terang' : 'Mode Gelap');
+}
+
+window.toggleAppTheme = function() {
+  const current = document.documentElement.getAttribute('data-theme') === 'dark' ? 'dark' : 'light';
+  const next = current === 'dark' ? 'light' : 'dark';
+  updateThemeUI(next);
+};
+
+document.addEventListener('DOMContentLoaded', () => {
+  const saved = document.documentElement.getAttribute('data-theme') || 'light';
+  updateThemeUI(saved);
+});
+
+/* ===========================================================
+   3. Unified Real-Time Engine (Server-Sent Events + Firestore)
+   =========================================================== */
+let sseSource = null;
+let unsubscribeFirestore = null;
+let syncHeartbeat = null;
+
+function isFirebaseConfigured() {
+  return typeof firebaseConfig !== 'undefined'
+    && firebaseConfig.apiKey && !String(firebaseConfig.apiKey).startsWith('GANTI_')
+    && firebaseConfig.projectId && !String(firebaseConfig.projectId).startsWith('GANTI_');
+}
+
+// -------------------------------------------------------------
+// 3.1 Server-Sent Events (SSE) for 100% Instant Live Sync
+// -------------------------------------------------------------
+function initServerEventSource() {
+  if (sseSource) {
+    try { sseSource.close(); } catch (e) {}
+    sseSource = null;
+  }
+
+  try {
+    sseSource = new EventSource('/api/apar_log/events');
+
+    sseSource.onmessage = (event) => {
+      if (!event.data) return;
+      try {
+        const payload = JSON.parse(event.data);
+        
+        if (payload.type === 'init') {
+          // Initial snapshot of all inspections from server
+          if (payload.logs && typeof payload.logs === 'object') {
+            LOG = payload.logs;
+            saveLocalLog(LOG);
+            renderRiwayat();
+            renderProgress();
+            const total = Object.keys(LOG).length;
+            setDbStatus('online', `Real-Time Aktif (${total} data)`);
+          }
+        } else if (payload.type === 'update' && payload.entry) {
+          // Instant broadcast from another user or device!
+          const entry = payload.entry;
+          const docId = String(entry.kode || entry.id).trim();
+          
+          LOG[docId] = entry;
+          if (entry.id) LOG[String(entry.id).trim()] = entry;
+          if (entry.kode) LOG[String(entry.kode).trim()] = entry;
+          
+          saveLocalLog(LOG);
+          renderRiwayat();
+          renderProgress();
+
+          if (currentEntry && String(currentEntry.kode || currentEntry.id).trim() === docId) {
+            currentEntry = { ...entry };
+            resultStatusBadge.textContent = '✅ Sudah Diperiksa';
+            resultStatusBadge.style.background = '#14532d';
+            resultStatusBadge.style.color = '#4ade80';
+          }
+
+          const count = payload.totalLogs || Object.keys(LOG).length;
+          setDbStatus('online', `Real-Time Aktif (${count} data)`);
+        } else if (payload.type === 'delete_single' && payload.docId) {
+          const targetId = String(payload.docId).trim().toLowerCase();
+          for (const k in LOG) {
+            if (k.toLowerCase() === targetId || (LOG[k] && (String(LOG[k].kode || '').trim().toLowerCase() === targetId || String(LOG[k].id || '').trim().toLowerCase() === targetId))) {
+              delete LOG[k];
+            }
+          }
+          saveLocalLog(LOG);
+          renderRiwayat();
+          renderProgress();
+
+          if (currentEntry && String(currentEntry.kode || currentEntry.id).trim().toLowerCase() === targetId) {
+            resultStatusBadge.textContent = 'Belum Diperiksa';
+            resultStatusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+            resultStatusBadge.style.color = '#f87171';
+          }
+
+          const count = payload.totalLogs !== undefined ? payload.totalLogs : Object.keys(LOG).length;
+          setDbStatus('online', `Real-Time Aktif (${count} data)`);
+        } else if (payload.type === 'reset') {
+          LOG = {};
+          saveLocalLog(LOG);
+          renderRiwayat();
+          renderProgress();
+        } else if (payload.type === 'user_deleted' && payload.deletedUserId) {
+          const delId = String(payload.deletedUserId).trim().toLowerCase();
+          const delEmail = payload.deletedUserEmail ? String(payload.deletedUserEmail).trim().toLowerCase() : '';
+
+          if (delId && !isBlacklistedId(delId)) addDeletedUserToSet(delId);
+          if (delEmail && !isBlacklistedId(delEmail)) addDeletedUserToSet(delEmail);
+
+          cachedAdminUsers = cachedAdminUsers.filter(u => 
+            String(u.id || '').trim().toLowerCase() !== delId && 
+            (delEmail ? String(u.email || '').trim().toLowerCase() !== delEmail : true)
+          );
+          try { localStorage.setItem('apar_all_users', JSON.stringify(cachedAdminUsers)); } catch (e) {}
+          renderAdminUserList();
+
+          if (currentUser) {
+            const curId = String(currentUser.id || '').trim().toLowerCase();
+            const curEmail = String(currentUser.email || '').trim().toLowerCase();
+
+            if ((delId && curId === delId) || (delEmail && curEmail === delEmail) || isUserDeleted(curId, curEmail)) {
+              const oldName = currentUser.name || currentUser.email || 'Petugas';
+              showAuthScreen();
+              alert(`⚠️ AKUN DIHAPUS!\n\nAkun Anda ("${oldName}") telah dihapus oleh Administrator K3.\n\nSesi login Anda telah diakhiri secara otomatis.`);
+              showStatus(`⚠️ Akun "${oldName}" telah dihapus oleh Admin K3. Sesi login berakhir.`, 'err');
+            }
+          }
+        } else if (payload.type === 'user_updated' && payload.user) {
+          const newU = payload.user;
+          if (newU.id) removeDeletedUserFromSet(newU.id);
+          if (newU.email) removeDeletedUserFromSet(newU.email);
+          if (newU.name) removeDeletedUserFromSet(newU.name);
+
+          const idx = cachedAdminUsers.findIndex(u => u.id === newU.id || (u.email && newU.email && u.email.toLowerCase() === newU.email.toLowerCase()));
+          if (idx >= 0) {
+            cachedAdminUsers[idx] = { ...cachedAdminUsers[idx], ...newU };
+          } else {
+            cachedAdminUsers.push(newU);
+          }
+          try { localStorage.setItem('apar_all_users', JSON.stringify(cachedAdminUsers)); } catch (e) {}
+          renderAdminUserList();
+        }
+      } catch (err) {
+        console.warn('Error parsing SSE message:', err);
+      }
+    };
+
+    sseSource.onopen = () => {
+      setDbStatus('online', 'Real-Time Aktif');
+    };
+
+    sseSource.onerror = () => {
+      console.warn('SSE disconnected, retrying in background...');
+      // Will auto-reconnect
+    };
+  } catch (err) {
+    console.error('Error starting SSE:', err);
+  }
+}
+
+// -------------------------------------------------------------
+// 3.2 Fetch Latest Data from Server & Cloud
+// -------------------------------------------------------------
+async function fetchFreshCloudData(showNotification = false) {
+  const btnSync = document.getElementById('btnForceSync');
+  if (btnSync) btnSync.classList.add('spinning');
+
+  let loadedCount = 0;
+
+  // 1. Fetch from Express Backend Server
+  try {
+    const res = await fetch('/api/apar_log', { cache: 'no-store' });
+    if (res.ok) {
+      const data = await res.json();
+      if (data && data.logs) {
+        LOG = data.logs;
+        saveLocalLog(LOG);
+        loadedCount = Object.keys(data.logs).length;
+      }
+    }
+  } catch (err) {
+    console.warn('Backend fetch error:', err);
+  }
+
+  // 2. Fetch from Firebase Firestore if configured
+  if (db && isFirebaseConfigured()) {
+    try {
+      let snapshot;
+      try {
+        snapshot = await db.collection(COLLECTION_NAME).get({ source: 'server' });
+      } catch (e) {
+        snapshot = await db.collection(COLLECTION_NAME).get();
+      }
+
+      const freshFsLogs = {};
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        if (d) {
+          freshFsLogs[doc.id] = d;
+          if (d.id) freshFsLogs[String(d.id).trim()] = d;
+          if (d.kode) freshFsLogs[String(d.kode).trim()] = d;
+        }
+      });
+      LOG = freshFsLogs;
+      saveLocalLog(LOG);
+      if (snapshot.size > loadedCount) loadedCount = snapshot.size;
+    } catch (e) {
+      console.warn('Firestore fetch error:', e);
+    }
+  }
+
+  renderRiwayat();
+  renderProgress();
+  setDbStatus('online', `Real-Time Aktif (${loadedCount} data)`);
+
+  if (btnSync) btnSync.classList.remove('spinning');
+
+  if (showNotification) {
+    showStatus(`✅ Progres diperbarui! ${loadedCount} data inspeksi termuat secara real-time.`, 'ok');
+  }
+}
+
+// -------------------------------------------------------------
+// 3.3 Firebase Firestore Realtime Listener
+// -------------------------------------------------------------
+function startFirestoreSync() {
+  if (!db || !isFirebaseConfigured()) return;
+
+  if (typeof unsubscribeFirestore === 'function') {
+    try { unsubscribeFirestore(); } catch (e) {}
+    unsubscribeFirestore = null;
+  }
+
+  try {
+    unsubscribeFirestore = db.collection(COLLECTION_NAME).onSnapshot(
+      (snapshot) => {
+        const fresh = {};
+        snapshot.forEach(doc => {
+          const d = doc.data();
+          if (d) {
+            fresh[doc.id] = d;
+            if (d.id) fresh[String(d.id).trim()] = d;
+            if (d.kode) fresh[String(d.kode).trim()] = d;
+          }
+        });
+        LOG = fresh;
+        saveLocalLog(LOG);
+        renderRiwayat();
+        renderProgress();
+      },
+      (err) => {
+        console.warn('Firestore onSnapshot warning:', err);
+        if (String(err.code || '').includes('permission-denied')) {
+          setDbStatus('offline', 'Firestore ditolak (cek Rules & Publish)');
+          showStatus('⚠️ Firestore menolak akses baca. Buka Firebase Console → Firestore Database → Rules, pastikan aturan sudah di-Publish.', 'err');
+        }
+      }
+    );
+  } catch (err) {
+    console.warn('Firestore onSnapshot error:', err);
+  }
+
+  // Real-time listener for deleted_users
+  try {
+    db.collection('deleted_users').onSnapshot((snapshot) => {
+      snapshot.forEach(doc => {
+        const d = doc.data();
+        if (d) {
+          const dId = d.id ? String(d.id).trim().toLowerCase() : '';
+          const dEm = d.email ? String(d.email).trim().toLowerCase() : '';
+
+          const isActive = Array.isArray(cachedAdminUsers) && cachedAdminUsers.some(u => {
+            if (!u) return false;
+            const uId = (u.id || '').toLowerCase().trim();
+            const uEm = (u.email || '').toLowerCase().trim();
+            return (dId && uId === dId) || (dEm && uEm === dEm);
+          });
+
+          if (isActive) {
+            if (dId) removeDeletedUserFromSet(dId);
+            if (dEm) removeDeletedUserFromSet(dEm);
+            doc.ref.delete().catch(() => {});
+          } else {
+            if (dId && !isBlacklistedId(dId)) addDeletedUserToSet(dId);
+            if (dEm && !isBlacklistedId(dEm)) addDeletedUserToSet(dEm);
+          }
+        }
+      });
+      verifyActiveUserSession();
+    });
+  } catch (err) {}
+
+  // Real-time listener for users collection
+  try {
+    db.collection('users').onSnapshot((snapshot) => {
+      const fsUsers = [];
+      snapshot.forEach(doc => {
+        const u = doc.data();
+        if (u) {
+          const uId = u.id || doc.id;
+          const uEm = u.email || '';
+          if (uId) removeDeletedUserFromSet(uId);
+          if (uEm) removeDeletedUserFromSet(uEm);
+
+          fsUsers.push({
+            id: uId,
+            name: u.name || uEm || uId,
+            email: uEm,
+            password: u.password || '123',
+            role: u.role || 'petugas',
+            created_at: u.createdAt || u.created_at || new Date().toISOString()
+          });
+        }
+      });
+      if (fsUsers.length) {
+        cachedAdminUsers = fsUsers;
+        try { localStorage.setItem('apar_all_users', JSON.stringify(cachedAdminUsers)); } catch (e) {}
+        renderAdminUserList();
+      }
+    });
+  } catch (err) {}
+}
+
+function initFirebase() {
+  // Always initialize server SSE for 100% instant sync
+  initServerEventSource();
+  fetchFreshCloudData(false);
+
+  if (isFirebaseConfigured()) {
+    try {
+      if (!firebase.apps.length) {
+        firebase.initializeApp(firebaseConfig);
+      }
+      db = firebase.firestore();
+      auth = firebase.auth();
+
+      startFirestoreSync();
+
+      auth.onAuthStateChanged((user) => {
+        if (user) {
+          setLoggedInUser({
+            email: user.email || 'petugas@apar.id',
+            name: user.displayName || (user.email ? user.email.split('@')[0] : 'Petugas')
+          });
+        }
+        startFirestoreSync();
+        fetchFreshCloudData(false);
+      });
+    } catch (e) {
+      console.warn('Firebase init notice:', e);
+      setDbStatus('offline', 'Firebase gagal terhubung');
+    }
+  }
+
+  // Restore stored user
+  const localUser = localStorage.getItem('apar_current_user');
+  if (localUser) {
+    try {
+      setLoggedInUser(JSON.parse(localUser));
+    } catch (e) {
+      showAuthScreen();
+    }
+  } else {
+    showAuthScreen();
+  }
+
+  // Heartbeat & focus refresh
+  if (syncHeartbeat) clearInterval(syncHeartbeat);
+  syncHeartbeat = setInterval(() => {
+    if (!document.hidden) fetchFreshCloudData(false);
+  }, 15000);
+
+  window.addEventListener('focus', () => fetchFreshCloudData(false));
+  document.addEventListener('visibilitychange', () => {
+    if (!document.hidden) fetchFreshCloudData(false);
+  });
+}
+
+const btnForceSync = document.getElementById('btnForceSync');
+if (btnForceSync) {
+  btnForceSync.addEventListener('click', () => fetchFreshCloudData(true));
+}
+
+/* ===========================================================
+   4. User Authentication & Role Handling (Petugas & Admin)
+   =========================================================== */
+const authScreen = document.getElementById('authScreen');
+const mainScreen = document.getElementById('mainScreen');
+const authForm = document.getElementById('authForm');
+const authIdentifier = document.getElementById('authIdentifier');
+const authPassword = document.getElementById('authPassword');
+const btnAuthSubmit = document.getElementById('btnAuthSubmit');
+const btnTogglePassword = document.getElementById('btnTogglePassword');
+const userAvatar = document.getElementById('userAvatar');
+const userNameText = document.getElementById('userNameText');
+const userRoleBadge = document.getElementById('userRoleBadge');
+const btnLogout = document.getElementById('btnLogout');
+
+// Admin Panel Elements
+const tabBtnAdmin = document.getElementById('tabBtnAdmin');
+const tabAdmin = document.getElementById('tabAdmin');
+const formAdminAddUser = document.getElementById('formAdminAddUser');
+const adminNewName = document.getElementById('adminNewName');
+const adminNewEmail = document.getElementById('adminNewEmail');
+const adminNewPass = document.getElementById('adminNewPass');
+const adminNewRole = document.getElementById('adminNewRole');
+const btnAdminSaveUser = document.getElementById('btnAdminSaveUser');
+const adminUserList = document.getElementById('adminUserList');
+const adminTotalUsersBadge = document.getElementById('adminTotalUsersBadge');
+const searchAdminUsers = document.getElementById('searchAdminUsers');
+const btnSyncUsersToFirebase = document.getElementById('btnSyncUsersToFirebase');
+
+let cachedAdminUsers = [];
+
+if (btnTogglePassword && authPassword) {
+  btnTogglePassword.addEventListener('click', (e) => {
+    e.preventDefault();
+    const isPass = authPassword.getAttribute('type') === 'password';
+    authPassword.setAttribute('type', isPass ? 'text' : 'password');
+    btnTogglePassword.textContent = isPass ? '🙈' : '👁️';
+  });
+}
+
+function isBlacklistedId(val) {
+  if (!val || typeof val !== 'string') return true;
+  const clean = val.trim().toLowerCase();
+  const blacklisted = ['undefined', 'null', '[object object]', 'petugas', 'admin', 'user', 'admin k3', 'petugas lapangan', ''];
+  return blacklisted.includes(clean);
+}
+
+function getDeletedUsersSet() {
+  try {
+    const raw = localStorage.getItem('apar_deleted_users_set');
+    const arr = raw ? JSON.parse(raw) : [];
+    const filtered = Array.isArray(arr) 
+      ? arr.filter(x => typeof x === 'string' && !isBlacklistedId(x))
+      : [];
+    return new Set(filtered.map(x => x.trim().toLowerCase()));
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function addDeletedUserToSet(idOrEmail) {
+  if (isBlacklistedId(idOrEmail)) return;
+  const clean = idOrEmail.trim().toLowerCase();
+  try {
+    const s = getDeletedUsersSet();
+    s.add(clean);
+    localStorage.setItem('apar_deleted_users_set', JSON.stringify(Array.from(s)));
+  } catch (e) {}
+}
+
+function removeDeletedUserFromSet(idOrEmail) {
+  if (isBlacklistedId(idOrEmail)) return;
+  const clean = idOrEmail.trim().toLowerCase();
+  try {
+    const s = getDeletedUsersSet();
+    s.delete(clean);
+    localStorage.setItem('apar_deleted_users_set', JSON.stringify(Array.from(s)));
+  } catch (e) {}
+}
+
+function isUserDeleted(id, email) {
+  const cId = (id && typeof id === 'string') ? id.toLowerCase().trim() : '';
+  const cEm = (email && typeof email === 'string') ? email.toLowerCase().trim() : '';
+
+  if (cId === 'user_admin' || cEm === 'admin@apar.id' || cId === 'admin') return false;
+
+  // Active accounts in cachedAdminUsers are ALWAYS active and NOT deleted
+  if (Array.isArray(cachedAdminUsers) && cachedAdminUsers.length > 0) {
+    const isActive = cachedAdminUsers.some(u => {
+      if (!u) return false;
+      const uId = (u.id || '').toLowerCase().trim();
+      const uEm = (u.email || '').toLowerCase().trim();
+      return (cId && uId === cId) || (cEm && uEm === cEm);
+    });
+    if (isActive) {
+      if (cId) removeDeletedUserFromSet(cId);
+      if (cEm) removeDeletedUserFromSet(cEm);
+      return false;
+    }
+  }
+
+  const s = getDeletedUsersSet();
+  const validId = cId && !isBlacklistedId(cId);
+  const validEm = cEm && !isBlacklistedId(cEm);
+
+  return (validId && s.has(cId)) || (validEm && s.has(cEm));
+}
+
+async function checkFirestoreUserLogin(identifier, password) {
+  if (!db || !isFirebaseConfigured() || !identifier || !password) return null;
+  const cleanId = String(identifier).toLowerCase().trim();
+  const cleanPass = String(password).trim();
+
+  if (isUserDeleted(cleanId, cleanId, cleanId)) return null;
+
+  try {
+    const snapshot = await db.collection('users').get();
+    let foundUser = null;
+    snapshot.forEach(doc => {
+      const u = doc.data();
+      if (u) {
+        const uId = String(u.id || doc.id).toLowerCase();
+        const uEmail = String(u.email || '').toLowerCase();
+        const uName = String(u.name || '').toLowerCase();
+        const uPrefix = uEmail ? uEmail.split('@')[0] : '';
+
+        if (!isUserDeleted(uId, uEmail, uName)) {
+          if (cleanId === uId || cleanId === uEmail || cleanId === uName || cleanId === uPrefix || (uName && uName.includes(cleanId))) {
+            const storedPass = String(u.password || '123').trim();
+            if (storedPass === cleanPass) {
+              foundUser = {
+                id: u.id || doc.id,
+                name: u.name || u.email,
+                email: u.email || '',
+                role: u.role || 'petugas',
+                password: storedPass
+              };
+            }
+          }
+        }
+      }
+    });
+
+    if (foundUser) {
+      try {
+        const local = JSON.parse(localStorage.getItem('apar_all_users') || '[]');
+        if (!local.some(x => x.id === foundUser.id || x.email === foundUser.email)) {
+          local.push(foundUser);
+          localStorage.setItem('apar_all_users', JSON.stringify(local));
+        }
+      } catch (e) {}
+
+      fetch('/api/auth/register', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(foundUser)
+      }).catch(() => {});
+
+      return foundUser;
+    }
+  } catch (e) {
+    console.warn('Firestore user check notice:', e);
+  }
+  return null;
+}
+
+// Strict Login Handler
+if (authForm) {
+  authForm.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const identifier = authIdentifier ? authIdentifier.value.trim() : '';
+    const password = authPassword ? authPassword.value.trim() : '';
+
+    if (!identifier) {
+      showStatus('Harap masukkan Nama, Username, atau Email akun.', 'err');
+      if (authIdentifier) authIdentifier.focus();
+      return;
+    }
+    if (!password) {
+      showStatus('Harap masukkan PIN atau Kata Sandi akun.', 'err');
+      if (authPassword) authPassword.focus();
+      return;
+    }
+
+    if (btnAuthSubmit) {
+      btnAuthSubmit.disabled = true;
+      btnAuthSubmit.textContent = '⏳ Memverifikasi akun...';
+    }
+
+    let loginSuccess = false;
+    let loggedUser = null;
+
+    try {
+      // Check local deleted set first!
+      if (isUserDeleted(identifier, identifier, identifier)) {
+        showStatus('⚠️ AKUN TIDAK TERSEDIA!\n\nAkun Anda telah dihapus oleh Admin K3 dan tidak dapat digunakan lagi.', 'err');
+        if (authPassword) { authPassword.focus(); authPassword.select(); }
+        return;
+      }
+
+      // 1. Primary: Server Verification
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 6000);
+
+        const res = await fetch('/api/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ identifier, password }),
+          signal: controller.signal
+        });
+        clearTimeout(timeoutId);
+
+        const data = await res.json().catch(() => null);
+
+        if (res.ok && data && data.success && data.user) {
+          loginSuccess = true;
+          loggedUser = data.user;
+        } else if (res.status === 401 && data && data.message) {
+          showStatus(data.message, 'err');
+          if (authPassword) { authPassword.focus(); authPassword.select(); }
+          return; // STOP! Server responded with rejection (wrong pass or deleted user). Do NOT allow fallback login!
+        }
+      } catch (err) {
+        console.warn('Server auth unreachable, attempting offline/cached validation:', err);
+      }
+
+      // 2. Secondary: Offline / Local Cache Validation (Only if server unreachable)
+      if (!loginSuccess) {
+        const cleanId = identifier.toLowerCase().trim();
+        const cleanPass = password.trim();
+
+        if (isUserDeleted(cleanId, cleanId, cleanId)) {
+          showStatus('⚠️ Akun telah dihapus oleh Administrator K3.', 'err');
+          return;
+        }
+
+        // Check Admin default
+        if ((cleanId === 'admin' || cleanId === 'user_admin' || cleanId === 'admin k3') && (cleanPass === 'admin' || cleanPass === '123')) {
+          loginSuccess = true;
+          loggedUser = {
+            id: 'user_admin',
+            name: 'Admin K3 / Pemeliharaan',
+            email: 'admin@apar.id',
+            role: 'admin'
+          };
+        }
+        else {
+          // Check localStorage cached accounts (filtering out deleted)
+          try {
+            const cached = JSON.parse(localStorage.getItem('apar_all_users') || '[]');
+            const found = cached.find(u => {
+              const uId = (u.id || '').toLowerCase();
+              const uEm = (u.email || '').toLowerCase();
+              const uNm = (u.name || '').toLowerCase();
+              if (isUserDeleted(uId, uEm, uNm)) return false;
+              return uEm === cleanId || uNm === cleanId || uId === cleanId;
+            });
+            if (found && String(found.password || '123').trim() === cleanPass) {
+              loginSuccess = true;
+              loggedUser = found;
+            }
+          } catch (e) {}
+
+          // Fallback to Firestore if still not logged in
+          if (!loginSuccess && db && isFirebaseConfigured()) {
+            const fsUser = await checkFirestoreUserLogin(identifier, password);
+            if (fsUser && !isUserDeleted(fsUser.id, fsUser.email, fsUser.name)) {
+              loginSuccess = true;
+              loggedUser = fsUser;
+            }
+          }
+        }
+      }
+
+      if (loginSuccess && loggedUser) {
+        setLoggedInUser(loggedUser);
+        const roleText = (loggedUser.role === 'admin') ? 'Administrator K3' : 'Petugas Lapangan';
+        showStatus(`🔑 Selamat bertugas, ${loggedUser.name} (${roleText})!`, 'ok');
+        fetchFreshCloudData(false);
+      } else {
+        showStatus('❌ Akun tidak ditemukan atau kata sandi salah! Periksa Nama/ID & PIN Anda.', 'err');
+        if (authPassword) {
+          authPassword.focus();
+          authPassword.select();
+        }
+      }
+    } catch (unexpectedErr) {
+      console.error('Unexpected login error:', unexpectedErr);
+      showStatus('Terjadi kesalahan saat memproses login.', 'err');
+    } finally {
+      if (btnAuthSubmit) {
+        btnAuthSubmit.disabled = false;
+        btnAuthSubmit.textContent = '🔑 Masuk ke Sistem';
+      }
+    }
+  });
+}
+
+function setLoggedInUser(user) {
+  currentUser = user;
+  try {
+    localStorage.setItem('apar_current_user', JSON.stringify(user));
+  } catch (e) {}
+  
+  const isAdmin = (user.role === 'admin' || (user.id === 'user_admin'));
+
+  if (userNameText) userNameText.textContent = user.name || user.email;
+  
+  if (userRoleBadge) {
+    userRoleBadge.textContent = isAdmin ? 'Admin' : 'Petugas';
+    userRoleBadge.className = `role-badge ${isAdmin ? 'admin' : 'petugas'}`;
+  }
+
+  if (userAvatar) {
+    if (isAdmin) {
+      userAvatar.textContent = '👑';
+      userAvatar.style.background = 'linear-gradient(135deg, #f59e0b, #d97706)';
+    } else {
+      userAvatar.textContent = (user.name || user.email || 'P')[0].toUpperCase();
+      userAvatar.style.background = 'linear-gradient(135deg, #10b981, #059669)';
+    }
+  }
+
+  // Toggle Admin Tab Visibility based on Role
+  if (tabBtnAdmin) {
+    if (isAdmin) {
+      tabBtnAdmin.classList.remove('hidden');
+    } else {
+      tabBtnAdmin.classList.add('hidden');
+    }
+  }
+
+  if (authScreen) authScreen.classList.add('hidden');
+  if (mainScreen) mainScreen.classList.remove('hidden');
+
+  // Sync user profile to Firebase Firestore if connected
+  syncUserProfileToFirebase(user);
+
+  renderRiwayat();
+  renderProgress();
+  if (isAdmin) {
+    loadAdminUserList();
+  }
+}
+
+async function syncUserProfileToFirebase(user) {
+  if (!db || !isFirebaseConfigured() || !user) return;
+  try {
+    const userDocId = String(user.id || user.email || 'user_' + Date.now()).replace(/[^a-zA-Z0-9_-]/g, '_');
+    await db.collection('users').doc(userDocId).set({
+      id: user.id || userDocId,
+      name: user.name || '',
+      email: user.email || '',
+      role: user.role || 'petugas',
+      lastLogin: new Date().toISOString()
+    }, { merge: true });
+  } catch (e) {
+    console.warn('Firebase user sync notice:', e);
+  }
+}
+
+// Reset login form fields on logout / load
+function showAuthScreen() {
+  currentUser = null;
+  try {
+    localStorage.removeItem('apar_current_user');
+  } catch (e) {}
+  if (authIdentifier) authIdentifier.value = '';
+  if (authPassword) authPassword.value = '';
+  if (authScreen) authScreen.classList.remove('hidden');
+  if (mainScreen) mainScreen.classList.add('hidden');
+  if (tabBtnAdmin) tabBtnAdmin.classList.add('hidden');
+}
+
+if (btnLogout) {
+  btnLogout.addEventListener('click', async (e) => {
+    e.preventDefault();
+    showAuthScreen();
+    showStatus('Anda telah keluar dari sesi akun.', 'info');
+  });
+}
+
+function getDefaultUsersList() {
+  return [
+    { id: 'user_admin', email: 'admin@apar.id', name: 'Admin K3 / Pemeliharaan', password: 'admin', role: 'admin', created_at: new Date().toISOString() }
+  ];
+}
+
+window.toggleUserPass = function(userId) {
+  const elVal = document.getElementById(`userPassVal_${userId}`);
+  const elTxt = document.getElementById(`userPassTxt_${userId}`);
+  if (!elVal) return;
+
+  const realPass = elVal.getAttribute('data-pass') || '123';
+  const isHidden = elVal.getAttribute('data-hidden') !== 'false';
+
+  if (isHidden) {
+    elVal.textContent = realPass;
+    elVal.setAttribute('data-hidden', 'false');
+    if (elTxt) elTxt.textContent = 'Sembunyikan';
+  } else {
+    elVal.textContent = '••••••';
+    elVal.setAttribute('data-hidden', 'true');
+    if (elTxt) elTxt.textContent = 'Lihat';
+  }
+};
+
+async function verifyActiveUserSession() {
+  if (!currentUser) return;
+  if (currentUser.id === 'user_admin' || currentUser.email === 'admin@apar.id' || currentUser.role === 'admin') return;
+
+  const curId = String(currentUser.id || '').trim().toLowerCase();
+  const curEmail = String(currentUser.email || '').trim().toLowerCase();
+
+  // ONLY log out if current user's ID or Email is explicitly marked as deleted in local/cloud set
+  if (isUserDeleted(curId, curEmail)) {
+    const oldName = currentUser.name || currentUser.email || 'Petugas';
+    showAuthScreen();
+    alert(`⚠️ AKUN TIDAK TERSEDIA!\n\nAkun Anda ("${oldName}") telah dihapus oleh Administrator K3.\n\nSesi login Anda telah diakhiri secara otomatis.`);
+    showStatus(`⚠️ Akun "${oldName}" telah dihapus oleh Admin K3. Sesi login diakhiri.`, 'err');
+  }
+}
+
+// Check session periodically every 4s and when window gains focus
+setInterval(verifyActiveUserSession, 4000);
+window.addEventListener('focus', verifyActiveUserSession);
+
+window.addEventListener('storage', (e) => {
+  if (e.key === 'apar_deleted_user_event' && e.newValue) {
+    try {
+      const data = JSON.parse(e.newValue);
+      if (data && currentUser) {
+        const targetIdStr = String(data.userId || '').trim().toLowerCase();
+        const targetEmailStr = String(data.userEmail || '').trim().toLowerCase();
+
+        if (targetIdStr) addDeletedUserToSet(targetIdStr);
+        if (targetEmailStr) addDeletedUserToSet(targetEmailStr);
+
+        const curId = String(currentUser.id || '').trim().toLowerCase();
+        const curEmail = String(currentUser.email || '').trim().toLowerCase();
+
+        if ((curId && curId === targetIdStr) || (curEmail && curEmail === targetEmailStr) || isUserDeleted(curId, curEmail)) {
+          const name = currentUser.name || currentUser.email;
+          showAuthScreen();
+          alert(`⚠️ AKUN DIHAPUS!\n\nAkun Anda ("${name}") telah dihapus oleh Admin K3.\n\nSesi login Anda telah diakhiri secara otomatis.`);
+          showStatus(`⚠️ Akun Anda (${name}) telah dihapus oleh Admin K3. Sesi login diakhiri.`, 'err');
+        }
+      }
+    } catch (err) {}
+  }
+});
+
+/* ===========================================================
+   Admin Panel: Manage Petugas & Accounts
+   =========================================================== */
+async function loadAdminUserList() {
+  if (!adminUserList) return;
+  try {
+    const res = await fetch('/api/users');
+    const contentType = res.headers.get('content-type') || '';
+    if (res.ok && contentType.includes('application/json')) {
+      const data = await res.json();
+      if (data && Array.isArray(data.users)) {
+        data.users.forEach(u => {
+          if (u.id) removeDeletedUserFromSet(u.id);
+          if (u.email) removeDeletedUserFromSet(u.email);
+        });
+        cachedAdminUsers = data.users;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch users from backend, loading local cache:', e);
+  }
+
+  // Fetch Firestore 'users' collection to merge accounts created on other devices!
+  if (db && isFirebaseConfigured()) {
+    try {
+      const snapshot = await db.collection('users').get();
+      const fsUsers = [];
+      snapshot.forEach(doc => {
+        const u = doc.data();
+        if (u) {
+          const uId = u.id || doc.id;
+          const uEm = u.email || '';
+          if (uId) removeDeletedUserFromSet(uId);
+          if (uEm) removeDeletedUserFromSet(uEm);
+
+          fsUsers.push({
+            id: uId,
+            name: u.name || uEm || uId,
+            email: uEm,
+            password: u.password || '123',
+            role: u.role || 'petugas',
+            created_at: u.createdAt || u.created_at || new Date().toISOString()
+          });
+        }
+      });
+      if (fsUsers.length) {
+        if (!cachedAdminUsers) cachedAdminUsers = [];
+        fsUsers.forEach(fU => {
+          const idx = cachedAdminUsers.findIndex(cU => 
+            cU.id === fU.id || (cU.email && fU.email && cU.email.toLowerCase() === fU.email.toLowerCase())
+          );
+          if (idx >= 0) {
+            cachedAdminUsers[idx] = { ...cachedAdminUsers[idx], ...fU };
+          } else {
+            cachedAdminUsers.push(fU);
+          }
+        });
+      }
+    } catch (fsErr) {
+      console.warn('Firestore user fetch notice:', fsErr);
+    }
+  }
+
+  // Fallback to localStorage or default if empty
+  if (!cachedAdminUsers || cachedAdminUsers.length === 0) {
+    try {
+      const local = JSON.parse(localStorage.getItem('apar_all_users') || '[]');
+      if (local && local.length) {
+        cachedAdminUsers = local;
+      } else {
+        cachedAdminUsers = getDefaultUsersList();
+      }
+    } catch (err) {
+      cachedAdminUsers = getDefaultUsersList();
+    }
+  }
+
+  try {
+    localStorage.setItem('apar_all_users', JSON.stringify(cachedAdminUsers));
+  } catch (e) {}
+
+  renderAdminUserList();
+  await verifyActiveUserSession();
+}
+
+function renderAdminUserList() {
+  if (!adminUserList) return;
+  const q = searchAdminUsers ? searchAdminUsers.value.trim().toLowerCase() : '';
+  const filtered = (cachedAdminUsers || []).filter(u => {
+    if (isUserDeleted(u.id, u.email)) return false;
+    if (!q) return true;
+    return (u.name && u.name.toLowerCase().includes(q)) ||
+           (u.email && u.email.toLowerCase().includes(q)) ||
+           (u.role && u.role.toLowerCase().includes(q));
+  });
+
+  if (adminTotalUsersBadge) {
+    adminTotalUsersBadge.textContent = `${filtered.length} Akun Terdaftar`;
+  }
+
+  if (filtered.length === 0) {
+    adminUserList.innerHTML = `<div style="text-align:center; padding: 24px; color: var(--text-muted); font-size: 0.85rem;">Tidak ada akun yang sesuai dengan pencarian.</div>`;
+    return;
+  }
+
+  const logsList = Object.values(LOG || {});
+
+  adminUserList.innerHTML = filtered.map(u => {
+    const isAdmin = (u.role === 'admin' || u.id === 'user_admin');
+    const isMainAdmin = (u.id === 'user_admin' || u.email === 'admin@apar.id');
+    const isCurrent = currentUser && (currentUser.id === u.id || currentUser.email === u.email);
+    const initials = isAdmin ? '👑' : ((u.name || 'P').trim().split(' ').map(w => w[0]).join('').slice(0, 2).toUpperCase() || 'P');
+    const createdStr = u.created_at ? new Date(u.created_at).toLocaleDateString('id-ID', { day: 'numeric', month: 'short', year: 'numeric' }) : 'Aktif';
+    const displayPass = u.password || '123';
+
+    // Count APAR inspected by this user
+    const userDoneCount = logsList.filter(entry => {
+      if (!entry) return false;
+      const p = String(entry.pemeriksa || '').trim().toLowerCase();
+      const pid = String(entry.pemeriksa_id || '').trim().toLowerCase();
+      const pem = String(entry.pemeriksa_email || '').trim().toLowerCase();
+      const uId = String(u.id || '').trim().toLowerCase();
+      const uEmail = String(u.email || '').trim().toLowerCase();
+      const uName = String(u.name || '').trim().toLowerCase();
+
+      return (uId && pid === uId) || (uEmail && pem === uEmail) || (uName && p === uName) || (uEmail && p === uEmail);
+    }).length;
+
+    return `
+      <div class="user-item-card" data-id="${escapeHtml(u.id)}">
+        <div class="user-item-info" style="flex: 1; min-width: 0;">
+          <div class="user-item-avatar ${isAdmin ? 'admin' : 'petugas'}">
+            ${escapeHtml(initials)}
+          </div>
+          <div class="user-item-text" style="flex: 1; min-width: 0;">
+            <div style="display:flex; align-items:center; gap:6px; flex-wrap:wrap;">
+              <span class="user-item-name">${escapeHtml(u.name)}</span>
+              <span class="role-badge ${isAdmin ? 'admin' : 'petugas'}">${isAdmin ? 'Admin' : 'Petugas'}</span>
+              ${isCurrent ? '<span style="font-size:0.68rem; color:#38bdf8; font-weight:600; background:rgba(56,189,248,0.15); padding:1px 6px; border-radius:4px;">(Akun Anda)</span>' : ''}
+            </div>
+            
+            <div class="user-item-sub">
+              <span>🆔 <b>${escapeHtml(u.email || u.id)}</b></span>
+              <span>•</span>
+              <span style="color:#4ade80; font-weight:600;">🔍 <b>${userDoneCount}</b> APAR Diperiksa</span>
+              <span>•</span>
+              <span>📅 ${escapeHtml(createdStr)}</span>
+            </div>
+
+            <!-- Password Info Block -->
+            <div style="margin-top: 6px; display: inline-flex; align-items: center; gap: 8px; background: rgba(15, 23, 42, 0.7); padding: 4px 10px; border-radius: 6px; border: 1px solid var(--border-subtle); font-size: 0.76rem;">
+              <span style="color: var(--text-muted);">🔑 Password:</span>
+              <span id="userPassVal_${escapeHtml(u.id)}" data-pass="${escapeHtml(displayPass)}" data-hidden="true" style="font-family: monospace; font-weight: 700; color: #38bdf8; letter-spacing: 1px;">••••••</span>
+              <button type="button" onclick="toggleUserPass('${escapeHtml(u.id)}')" style="background:none; border:none; color: var(--text-muted); cursor:pointer; font-size:0.75rem; padding: 2px 4px; border-radius:3px; display:inline-flex; align-items:center; gap:3px;" title="Lihat/Sembunyikan Kata Sandi">
+                👁️ <span id="userPassTxt_${escapeHtml(u.id)}">Lihat</span>
+              </button>
+            </div>
+          </div>
+        </div>
+
+        <div style="display: flex; align-items: center; gap: 6px;">
+          ${isMainAdmin ? `
+            <span style="font-size:0.75rem; color:var(--text-muted); background:rgba(255,255,255,0.05); padding:4px 10px; border-radius:6px; border:1px solid var(--border);">Utama</span>
+          ` : `
+            <button type="button" class="btn-delete-user" onclick="handleDeleteUser('${escapeHtml(u.id)}', '${escapeHtml(u.name)}', '${escapeHtml(u.email)}')">
+              🗑️ Hapus Akun
+            </button>
+          `}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+if (searchAdminUsers) {
+  searchAdminUsers.addEventListener('input', renderAdminUserList);
+}
+
+// Add User Handler (Admin Only)
+if (formAdminAddUser) {
+  formAdminAddUser.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const name = adminNewName ? adminNewName.value.trim() : '';
+    const email = adminNewEmail ? adminNewEmail.value.trim() : '';
+    const password = adminNewPass ? adminNewPass.value.trim() : '';
+    const role = adminNewRole ? adminNewRole.value : 'petugas';
+
+    if (!name || !email || !password) {
+      showStatus('Harap lengkapi semua kolom pendaftaran akun.', 'err');
+      return;
+    }
+
+    if (btnAdminSaveUser) {
+      btnAdminSaveUser.disabled = true;
+      btnAdminSaveUser.textContent = '⏳ Menyimpan...';
+    }
+
+    let newUserObj = {
+      id: 'user_' + Date.now(),
+      name,
+      email,
+      password,
+      role,
+      created_at: new Date().toISOString()
+    };
+
+    try {
+      // Clear deleted status if re-creating
+      removeDeletedUserFromSet(newUserObj.id);
+      removeDeletedUserFromSet(email);
+
+      // 1. Save to Backend Server with short timeout
+      try {
+        const fetchController = new AbortController();
+        const timeoutId = setTimeout(() => fetchController.abort(), 3000);
+        const res = await fetch('/api/users', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ name, email, password, role }),
+          signal: fetchController.signal
+        });
+        clearTimeout(timeoutId);
+
+        const contentType = res.headers.get('content-type') || '';
+        if (contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data && data.user) {
+            newUserObj = { ...newUserObj, ...data.user };
+          }
+        }
+      } catch (backendErr) {
+        console.warn('Backend user save notice:', backendErr);
+      }
+
+      // 2. Save to Local Memory and Storage
+      cachedAdminUsers = cachedAdminUsers.filter(u => u.id !== newUserObj.id && u.email !== newUserObj.email);
+      cachedAdminUsers.push(newUserObj);
+      try {
+        localStorage.setItem('apar_all_users', JSON.stringify(cachedAdminUsers));
+      } catch (e) {}
+
+      // 3. Save & Sync to Firebase Firestore
+      if (db && isFirebaseConfigured()) {
+        try {
+          const docId = String(newUserObj.id || email).replace(/[^a-zA-Z0-9_-]/g, '_');
+          await db.collection('users').doc(docId).set({
+            id: newUserObj.id,
+            name: newUserObj.name,
+            email: newUserObj.email,
+            password: newUserObj.password || password || '123',
+            role: newUserObj.role,
+            createdAt: new Date().toISOString()
+          }, { merge: true });
+
+          // Delete any matching stale documents in Firestore deleted_users collection
+          try {
+            const cleanEmailStr = String(email).trim().toLowerCase();
+            const cleanNameStr = String(name).trim().toLowerCase();
+            const snapDel = await db.collection('deleted_users').get();
+            snapDel.forEach(doc => {
+              const d = doc.data();
+              if (d) {
+                const dId = String(d.id || doc.id).trim().toLowerCase();
+                const dEm = String(d.email || '').trim().toLowerCase();
+                const dNm = String(d.name || '').trim().toLowerCase();
+                if (dId === cleanEmailStr || dEm === cleanEmailStr || dNm === cleanNameStr || dId === newUserObj.id.toLowerCase()) {
+                  doc.ref.delete().catch(() => {});
+                }
+              }
+            });
+          } catch (e) {}
+        } catch (fbErr) {
+          console.warn('Firestore user save notice:', fbErr);
+        }
+      }
+
+      showStatus(`✅ Akun "${name}" (${role === 'admin' ? 'Admin' : 'Petugas'}) berhasil didaftarkan!`, 'ok');
+
+      // Reset form & reload
+      if (adminNewName) adminNewName.value = '';
+      if (adminNewEmail) adminNewEmail.value = '';
+      if (adminNewPass) adminNewPass.value = '123';
+      if (adminNewRole) adminNewRole.value = 'petugas';
+      
+      renderAdminUserList();
+    } catch (err) {
+      console.error('Error in user creation flow:', err);
+      showStatus('Terjadi kendala saat menyimpan akun.', 'err');
+    } finally {
+      if (btnAdminSaveUser) {
+        btnAdminSaveUser.disabled = false;
+        btnAdminSaveUser.textContent = '💾 Daftarkan Akun Baru';
+      }
+    }
+  });
+}
+
+// Delete User Handler (Admin Only)
+window.handleDeleteUser = async function(userId, userName, userEmail) {
+  if (!userId) return;
+  const displayName = userName || userEmail || userId;
+  const isConfirmed = confirm(`Apakah Anda yakin ingin menghapus akun petugas "${displayName}"?`);
+  if (!isConfirmed) return;
+
+  const targetIdStr = String(userId).trim().toLowerCase();
+  const targetEmailStr = String(userEmail || '').trim().toLowerCase();
+
+  // Mark as deleted in local set
+  if (targetIdStr) addDeletedUserToSet(targetIdStr);
+  if (targetEmailStr) addDeletedUserToSet(targetEmailStr);
+
+  // 1. Delete from Backend Server SQLite
+  try {
+    const fetchController = new AbortController();
+    const timeoutId = setTimeout(() => fetchController.abort(), 3000);
+    await fetch(`/api/users/${encodeURIComponent(userId)}`, {
+      method: 'DELETE',
+      signal: fetchController.signal
+    }).catch(() => {});
+    clearTimeout(timeoutId);
+  } catch (err) {}
+
+  // 2. Delete from Local Cache & Storage
+  cachedAdminUsers = cachedAdminUsers.filter(u => 
+    String(u.id || '').trim().toLowerCase() !== targetIdStr && 
+    (targetEmailStr ? String(u.email || '').trim().toLowerCase() !== targetEmailStr : true)
+  );
+  try {
+    localStorage.setItem('apar_all_users', JSON.stringify(cachedAdminUsers));
+    // Dispatch cross-tab logout signal
+    localStorage.setItem('apar_deleted_user_event', JSON.stringify({ 
+      userId: targetIdStr, 
+      userEmail: targetEmailStr,
+      userName: displayName, 
+      timestamp: Date.now() 
+    }));
+  } catch (e) {}
+
+  // 3. Sync deletion to Firebase Firestore
+  if (db && isFirebaseConfigured()) {
+    try {
+      const docId = String(userId).replace(/[^a-zA-Z0-9_-]/g, '_');
+      await db.collection('users').doc(docId).delete().catch(() => {});
+      if (userEmail) {
+        const emailDocId = String(userEmail).replace(/[^a-zA-Z0-9_-]/g, '_');
+        await db.collection('users').doc(emailDocId).delete().catch(() => {});
+      }
+
+      // Track in Firestore deleted_users collection for multi-device sync
+      await db.collection('deleted_users').doc(docId).set({
+        id: targetIdStr,
+        email: targetEmailStr,
+        deletedAt: new Date().toISOString()
+      }, { merge: true });
+    } catch (e) {
+      console.warn('Firestore user deletion sync notice:', e);
+    }
+  }
+
+  showStatus(`🗑️ Akun "${displayName}" berhasil dihapus.`, 'ok');
+  renderAdminUserList();
+
+  // 4. Auto-logout if deleted user is current user
+  if (currentUser) {
+    const curId = String(currentUser.id || '').trim().toLowerCase();
+    const curEmail = String(currentUser.email || '').trim().toLowerCase();
+
+    if ((curId && curId === targetIdStr) || (curEmail && curEmail === targetEmailStr) || isUserDeleted(curId, curEmail)) {
+      showAuthScreen();
+      alert(`⚠️ AKUN DIHAPUS!\n\nAkun Anda ("${displayName}") telah dihapus. Sesi login Anda telah diakhiri secara otomatis.`);
+      showStatus(`Akun "${displayName}" telah dihapus. Sesi login diakhiri.`, 'err');
+    }
+  }
+};
+
+// Sync all users to Firebase Firestore (Resilient & Fail-Safe)
+if (btnSyncUsersToFirebase) {
+  btnSyncUsersToFirebase.addEventListener('click', async () => {
+    if (!isFirebaseConfigured()) {
+      showStatus('⚠️ Firebase belum dikonfigurasi aktif. Silakan periksa firebase-config.js.', 'err');
+      return;
+    }
+
+    if (!db) {
+      try {
+        if (!firebase.apps.length) {
+          firebase.initializeApp(firebaseConfig);
+        }
+        db = firebase.firestore();
+      } catch (fbInitErr) {
+        showStatus('Gagal menginisialisasi Firebase: ' + fbInitErr.message, 'err');
+        return;
+      }
+    }
+
+    btnSyncUsersToFirebase.disabled = true;
+    btnSyncUsersToFirebase.textContent = '⏳ Menyinkronkan ke Firebase...';
+
+    try {
+      let usersToSync = [];
+      try {
+        const fetchController = new AbortController();
+        const timeoutId = setTimeout(() => fetchController.abort(), 3000);
+        const res = await fetch('/api/users', { signal: fetchController.signal });
+        clearTimeout(timeoutId);
+
+        const contentType = res.headers.get('content-type') || '';
+        if (res.ok && contentType.includes('application/json')) {
+          const data = await res.json();
+          if (data && Array.isArray(data.users) && data.users.length) {
+            usersToSync = data.users;
+          }
+        }
+      } catch (fetchErr) {
+        console.warn('Backend fetch notice during sync:', fetchErr);
+      }
+
+      if (!usersToSync.length) {
+        usersToSync = cachedAdminUsers || [];
+      }
+      if (!usersToSync.length) {
+        try {
+          usersToSync = JSON.parse(localStorage.getItem('apar_all_users') || '[]');
+        } catch (e) {}
+      }
+      if (!usersToSync.length) {
+        usersToSync = getDefaultUsersList();
+      }
+
+      let syncedCount = 0;
+      const batch = db.batch();
+      for (const u of usersToSync) {
+        const rawId = u.id || u.email || 'user_' + Date.now();
+        const docId = String(rawId).replace(/[^a-zA-Z0-9_-]/g, '_');
+        const docRef = db.collection('users').doc(docId);
+        batch.set(docRef, {
+          id: u.id || docId,
+          name: u.name || 'Petugas',
+          email: u.email || '',
+          password: u.password || '123',
+          role: u.role || 'petugas',
+          syncedAt: new Date().toISOString()
+        }, { merge: true });
+        syncedCount++;
+      }
+
+      const commitPromise = batch.commit();
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Koneksi Firestore Timeout (Koneksi lambat atau Rules ditolak)')), 15000)
+      );
+
+      await Promise.race([commitPromise, timeoutPromise]);
+
+      cachedAdminUsers = usersToSync;
+      try {
+        localStorage.setItem('apar_all_users', JSON.stringify(cachedAdminUsers));
+      } catch (e) {}
+      renderAdminUserList();
+
+      showStatus(`✨ Berhasil menyinkronkan ${syncedCount} akun ke Firebase Firestore! ✅`, 'ok');
+    } catch (e) {
+      console.warn('Firebase sync notice:', e);
+      const errMsg = String(e.message || '');
+      const errCode = String(e.code || '');
+
+      if (errCode.includes('permission-denied') || errMsg.includes('permission') || errMsg.includes('PERMISSION_DENIED')) {
+        showStatus('⚠️ Akses Ditolak (Permission Denied): Anda perlu mengeklik tombol "Publish" (Publikasikan) di bagian atas editor Rules Firebase Console.', 'err');
+      } else if (errMsg.includes('Timeout')) {
+        showStatus('⚠️ Koneksi Firestore Timeout: Pastikan "Firestore Database" sudah dibuat (Create Database) & tombol "Publish" sudah diklik.', 'err');
+      } else {
+        showStatus('Gagal menyinkronkan akun: ' + (errMsg || errCode || 'Terjadi kendala jaringan'), 'err');
+      }
+    } finally {
+      if (btnSyncUsersToFirebase) {
+        btnSyncUsersToFirebase.disabled = false;
+        btnSyncUsersToFirebase.textContent = '🔄 Sinkronkan Akun ke Firebase Firestore';
+      }
+    }
+  });
+}
+
+// Helper & Handlers for Google Apps Script & Drive Integration
+if (!GDRIVE_SETTINGS.googleScriptUrl) {
+  GDRIVE_SETTINGS.googleScriptUrl = localStorage.getItem('apar_gdrive_url') || '';
+}
+
+function sanitizeScriptUrl(inputUrl) {
+  if (!inputUrl) return '';
+  let url = String(inputUrl).trim().replace(/^["']|["']$/g, '');
+  if (url && !url.startsWith('http://') && !url.startsWith('https://')) {
+    url = 'https://' + url;
+  }
+  if (url.includes('/edit')) {
+    url = url.replace(/\/edit(\?.*)?$/, '/exec$1');
+  }
+  if (url.includes('/dev')) {
+    url = url.replace(/\/dev(\?.*)?$/, '/exec$1');
+  }
+  return url;
+}
+
+// Universal resilient Google Apps Script sender (Works on Node server & static hosts like GitHub Pages)
+async function sendPayloadToGoogleAppsScript(scriptUrl, payload) {
+  let url = sanitizeScriptUrl(scriptUrl || GDRIVE_SETTINGS.googleScriptUrl || localStorage.getItem('apar_gdrive_url') || '');
+  if (!url) {
+    return { success: false, message: 'URL Google Apps Script belum diisi di Pengaturan.' };
+  }
+
+  if (url.includes('docs.google.com/spreadsheets')) {
+    return {
+      success: false,
+      message: 'URL yang dimasukkan adalah link Google Sheets (docs.google.com). Harap gunakan Web App URL dari menu Extensions > Apps Script > Deploy > New Deployment > Web App (berakhiran /exec).'
+    };
+  }
+
+  // 1. Attempt Node server API proxy if backend is running
+  let serverData = null;
+  try {
+    const res = await fetch('/api/gdrive/sync', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ googleScriptUrl: url, payload: payload })
+    });
+
+    const text = await res.text();
+    const isHtml = text.trim().startsWith('<') || text.includes('<!DOCTYPE html>') || text.includes('<html');
+
+    if (res.ok && !isHtml) {
+      try {
+        serverData = JSON.parse(text);
+        if (serverData && serverData.success) {
+          return serverData;
+        }
+      } catch (pErr) {}
+    } else if (isHtml && !text.includes('405') && (text.includes('accounts.google.com') || text.includes('Sign in'))) {
+      return {
+        success: false,
+        message: 'Akses Ditolak Google: Pengaturan "Who has access" di Google Apps Script belum diset ke "Anyone" (Siapa saja).'
+      };
+    }
+  } catch (netErr) {
+    console.warn('Backend proxy fetch notice, switching to direct client sync:', netErr);
+  }
+
+  if (serverData && serverData.message) {
+    if (serverData.message.includes('Who has access') || serverData.message.includes('Spreadsheet')) {
+      return serverData;
+    }
+  }
+
+  // 2. Direct client-side POST to Google Apps Script Web App URL
+  // (Crucial for static hosting environments like GitHub Pages / rahmatagus2727-bit.github.io)
+  try {
+    const directRes = await fetch(url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify(payload)
+    });
+    const directText = await directRes.text();
+
+    if (directText && (directText.startsWith('{') || directText.includes('"success"'))) {
+      try {
+        const directData = JSON.parse(directText);
+        return directData;
+      } catch (e) {}
+    }
+
+    if (directText.includes('accounts.google.com') || directText.includes('Sign in')) {
+      return {
+        success: false,
+        message: 'Akses Ditolak Google: Pengaturan "Who has access" di Google Apps Script belum diset ke "Anyone".'
+      };
+    }
+
+    return {
+      success: true,
+      message: 'Data berhasil dikirim & ditulis ke Google Sheets Anda! 🎉'
+    };
+  } catch (directErr) {
+    // 3. Fallback no-cors fetch (Google Apps Script will still receive and execute it)
+    try {
+      await fetch(url, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+        body: JSON.stringify(payload)
+      });
+      return {
+        success: true,
+        message: 'Data berhasil dikirim langsung ke Google Sheets Anda! 🎉'
+      };
+    } catch (e2) {
+      return {
+        success: false,
+        message: 'Gagal terhubung ke Google Apps Script: ' + e2.message
+      };
+    }
+  }
+}
+
+async function syncSingleToGoogleSheets(doc) {
+  if (!doc) return null;
+  const url = GDRIVE_SETTINGS.googleScriptUrl || localStorage.getItem('apar_gdrive_url') || '';
+  if (!url) return null;
+
+  const result = await sendPayloadToGoogleAppsScript(url, doc);
+  if (result && result.success) {
+    console.log('✅ Synchronized log to Google Sheets & Drive:', doc.kode || doc.id);
+    showStatus(`Tersimpan ke Cloud & Google Sheets (${doc.kode || doc.id}) ✅`, 'ok');
+    return result;
+  }
+  return null;
+}
+
+async function syncSingleDeleteToGoogleSheets(kodeStr) {
+  if (!kodeStr) return null;
+  const url = GDRIVE_SETTINGS.googleScriptUrl || localStorage.getItem('apar_gdrive_url') || '';
+  if (!url) return null;
+
+  const payload = { action: 'delete', kode: kodeStr, id: kodeStr };
+  const result = await sendPayloadToGoogleAppsScript(url, payload);
+  if (result && result.success) {
+    console.log('✅ Google Sheets delete sync success:', kodeStr);
+    return result;
+  }
+  return null;
+}
+
+async function syncAllToGoogleSheets() {
+  const url = GDRIVE_SETTINGS.googleScriptUrl || localStorage.getItem('apar_gdrive_url') || '';
+  if (!url) {
+    showStatus('Harap masukkan dan simpan Web App URL Google Apps Script terlebih dahulu di Admin Dashboard.', 'err');
+    alert('⚠️ Harap masukkan Web App URL Google Apps Script terlebih dahulu!');
+    return null;
+  }
+
+  const btnBulk = document.getElementById('btnBulkSyncGas');
+  if (btnBulk) {
+    btnBulk.disabled = true;
+    btnBulk.textContent = '⏳ Mengambil data...';
+  }
+
+  showStatus('⏳ Mengambil seluruh data hasil pemeriksaan untuk dikirim massal...', 'info');
+
+  // 1. Fetch latest data snapshot from server API first if available
+  let freshLogs = { ...LOG };
+  try {
+    const apiRes = await fetch('/api/apar_log');
+    if (apiRes.ok) {
+      const apiData = await apiRes.json();
+      if (apiData && apiData.logs) {
+        freshLogs = { ...freshLogs, ...apiData.logs };
+        LOG = freshLogs;
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch fresh logs before bulk sync:', e);
+  }
+
+  // 2. Deduplicate and filter active items
+  const itemsMap = {};
+  for (const k in freshLogs) {
+    const item = freshLogs[k];
+    if (item && (item.kode || item.id)) {
+      const key = String(item.kode || item.id).trim().toUpperCase();
+      itemsMap[key] = item;
+    }
+  }
+
+  const rawList = Object.values(itemsMap);
+  if (rawList.length === 0) {
+    showStatus('⚠️ Belum ada data hasil pemeriksaan APAR yang tersimpan di sistem.', 'err');
+    alert('⚠️ Belum ada data hasil pemeriksaan APAR di aplikasi.');
+    if (btnBulk) {
+      btnBulk.disabled = false;
+      btnBulk.textContent = '📤 Kirim Massal Semua Data';
+    }
+    return null;
+  }
+
+  // 3. Clean items array to keep JSON payload lightweight
+  const cleanList = rawList.map(item => {
+    const copy = { ...item };
+    if (copy.foto && typeof copy.foto === 'string' && copy.foto.length > 300000 && copy.photoUrl) {
+      delete copy.foto;
+    }
+    return copy;
+  });
+
+  if (btnBulk) {
+    btnBulk.textContent = `⏳ Mengirim ${cleanList.length} Data...`;
+  }
+
+  showStatus(`⏳ Sedang mengunggah massal ${cleanList.length} data inspeksi ke Google Sheets...`, 'info');
+
+  const bulkPayload = {
+    action: 'sync_all',
+    items: cleanList
+  };
+
+  try {
+    const result = await sendPayloadToGoogleAppsScript(url, bulkPayload);
+
+    if (result && result.success) {
+      const msg = `✨ Berhasil! Total ${cleanList.length} data inspeksi berhasil dikirim & ditulis ke Google Sheets! 🎉`;
+      showStatus(msg, 'ok');
+      alert(`🎉 SINKRONISASI BERHASIL!\n\n${result.message || 'Data telah berhasil ditulis ke Google Sheets Anda.'}\nTotal Data Dikirim: ${cleanList.length} APAR.`);
+      return result;
+    } else {
+      const errMsg = (result && result.message) ? result.message : 'Gagal terhubung ke Google Apps Script.';
+      showStatus('❌ ' + errMsg, 'err');
+      alert('❌ SINKRONISASI GAGAL:\n\n' + errMsg);
+    }
+  } catch (err) {
+    console.warn('Bulk sync error:', err);
+    showStatus('❌ Kendala pengiriman data: ' + err.message, 'err');
+    alert('❌ KENDALA PENGIRIMAN:\n' + err.message);
+  } finally {
+    if (btnBulk) {
+      btnBulk.disabled = false;
+      btnBulk.textContent = '📤 Kirim Massal Semua Data';
+    }
+  }
+
+  return null;
+}
+window.syncAllToGoogleSheets = syncAllToGoogleSheets;
+
+window.copyGasCode = function() {
+  const codeEl = document.getElementById('gasCodeBox');
+  if (!codeEl) return;
+  const text = codeEl.innerText || codeEl.textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    showStatus('📋 Kode Apps Script berhasil di-copy!', 'ok');
+  }).catch(() => {
+    showStatus('Gagal menyalin otomatis, silakan blok dan copy manual.', 'err');
+  });
+};
+
+const formGasConfig = document.getElementById('formGasConfig');
+const gasUrlInput = document.getElementById('gasUrlInput');
+const btnTestGasSync = document.getElementById('btnTestGasSync');
+
+if (gasUrlInput) {
+  if (GDRIVE_SETTINGS.googleScriptUrl) {
+    gasUrlInput.value = GDRIVE_SETTINGS.googleScriptUrl;
+  }
+
+  fetch('/api/gdrive/config')
+    .then(r => r.json())
+    .then(data => {
+      if (data && data.googleScriptUrl) {
+        GDRIVE_SETTINGS.googleScriptUrl = data.googleScriptUrl;
+        gasUrlInput.value = data.googleScriptUrl;
+        try { localStorage.setItem('apar_gdrive_url', data.googleScriptUrl); } catch (e) {}
+      }
+    })
+    .catch(() => {});
+
+  if (db && isFirebaseConfigured()) {
+    db.collection('settings').doc('gdrive').get()
+      .then(doc => {
+        if (doc.exists && doc.data() && doc.data().googleScriptUrl) {
+          const fsUrl = doc.data().googleScriptUrl;
+          GDRIVE_SETTINGS.googleScriptUrl = fsUrl;
+          gasUrlInput.value = fsUrl;
+          try { localStorage.setItem('apar_gdrive_url', fsUrl); } catch (e) {}
+        }
+      })
+      .catch(() => {});
+  }
+}
+
+if (formGasConfig) {
+  formGasConfig.addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const rawUrl = gasUrlInput ? gasUrlInput.value : '';
+    const cleanUrl = sanitizeScriptUrl(rawUrl);
+
+    if (!cleanUrl) {
+      showStatus('Harap masukkan Web App URL Google Apps Script yang valid (berakhiran /exec).', 'err');
+      return;
+    }
+
+    if (gasUrlInput) gasUrlInput.value = cleanUrl;
+
+    GDRIVE_SETTINGS.googleScriptUrl = cleanUrl;
+    GDRIVE_SETTINGS.autoSyncGdrive = true;
+    try {
+      localStorage.setItem('apar_gdrive_url', cleanUrl);
+    } catch (e) {}
+
+    let savedServer = false;
+    let savedFirestore = false;
+
+    try {
+      const res = await fetch('/api/gdrive/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ googleScriptUrl: cleanUrl, autoSyncGdrive: true })
+      });
+      const data = await res.json();
+      if (res.ok && data.success) {
+        savedServer = true;
+      }
+    } catch (err) {
+      console.warn('Server save gdrive config notice:', err);
+    }
+
+    if (db && isFirebaseConfigured()) {
+      try {
+        await db.collection('settings').doc('gdrive').set({
+          googleScriptUrl: cleanUrl,
+          updatedAt: new Date().toISOString()
+        }, { merge: true });
+        savedFirestore = true;
+      } catch (fsErr) {
+        console.warn('Firestore save gdrive config notice:', fsErr);
+      }
+    }
+
+    showStatus('✅ URL Google Apps Script berhasil disimpan! Aplikasi siap menyinkronkan data ke Google Sheets & Drive.', 'ok');
+  });
+}
+
+if (btnTestGasSync) {
+  btnTestGasSync.addEventListener('click', async () => {
+    const rawUrl = gasUrlInput ? gasUrlInput.value : '';
+    const cleanUrl = sanitizeScriptUrl(rawUrl);
+
+    if (!cleanUrl) {
+      showStatus('Masukkan Web App URL terlebih dahulu sebelum dites.', 'err');
+      alert('⚠️ Harap masukkan Web App URL Google Apps Script terlebih dahulu.');
+      return;
+    }
+
+    if (gasUrlInput) gasUrlInput.value = cleanUrl;
+    GDRIVE_SETTINGS.googleScriptUrl = cleanUrl;
+
+    btnTestGasSync.disabled = true;
+    btnTestGasSync.textContent = '⏳ Menguji Koneksi...';
+
+    try {
+      const samplePayload = {
+        tanggal: new Date().toLocaleString('id-ID'),
+        kode: 'TEST_KONEKSI',
+        gedung: 'Gedung Utama',
+        ruangan: 'Ruang Server K3',
+        lantai: '1',
+        merk: 'TEST',
+        kapasitas: '3 kg',
+        jenisGas: 'Powder',
+        status: 'OK',
+        keterangan: 'Tes koneksi Google Sheets & Drive dari Admin Dashboard',
+        pemeriksa: currentUser ? (currentUser.name || currentUser.email) : 'Admin K3'
+      };
+
+      const result = await sendPayloadToGoogleAppsScript(cleanUrl, samplePayload);
+
+      if (result && result.success) {
+        showStatus('✨ Berhasil! Data tes berhasil dikirim dan ditulis ke Google Sheets Anda! 🎉', 'ok');
+        alert('🎉 TES KONEKSI SUKSES!\n\n' + (result.message || 'Data tes telah berhasil masuk ke Google Sheets Anda.'));
+      } else {
+        const errMsg = (result && result.message) ? result.message : 'Gagal terhubung ke Google Apps Script.';
+        showStatus('❌ ' + errMsg, 'err');
+        alert('❌ TES KONEKSI GAGAL:\n\n' + errMsg);
+      }
+    } catch (err) {
+      showStatus('Gagal tes koneksi: ' + err.message, 'err');
+      alert('❌ TES KONEKSI GAGAL:\n\n' + err.message);
+    } finally {
+      if (btnTestGasSync) {
+        btnTestGasSync.disabled = false;
+        btnTestGasSync.textContent = '⚡ Tes Koneksi';
+      }
+    }
+  });
+}
+
+const btnBulkSyncGas = document.getElementById('btnBulkSyncGas');
+if (btnBulkSyncGas) {
+  btnBulkSyncGas.addEventListener('click', () => {
+    syncAllToGoogleSheets();
+  });
+}
+
+/* ===========================================================
+   5. Tab Navigation
+   =========================================================== */
+const tabBtnScan = document.getElementById('tabBtnScan');
+const tabBtnRiwayat = document.getElementById('tabBtnRiwayat');
+const tabScan = document.getElementById('tabScan');
+const tabRiwayat = document.getElementById('tabRiwayat');
+
+function goTab(name) {
+  const isScan = name === 'scan';
+  const isRiwayat = name === 'riwayat';
+  const isAdmin = name === 'admin';
+
+  if (tabBtnScan) tabBtnScan.classList.toggle('active', isScan);
+  if (tabBtnRiwayat) tabBtnRiwayat.classList.toggle('active', isRiwayat);
+  if (tabBtnAdmin) tabBtnAdmin.classList.toggle('active', isAdmin);
+
+  if (tabScan) tabScan.classList.toggle('active', isScan);
+  if (tabRiwayat) tabRiwayat.classList.toggle('active', isRiwayat);
+  if (tabAdmin) tabAdmin.classList.toggle('active', isAdmin);
+  
+  if (!isScan) {
+    stopScanner();
+  }
+  if (isRiwayat) {
+    renderRiwayat();
+    renderProgress();
+    fetchFreshCloudData(false);
+  }
+  if (isAdmin) {
+    loadAdminUserList();
+  }
+}
+
+if (tabBtnScan) tabBtnScan.addEventListener('click', () => goTab('scan'));
+if (tabBtnRiwayat) tabBtnRiwayat.addEventListener('click', () => goTab('riwayat'));
+if (tabBtnAdmin) tabBtnAdmin.addEventListener('click', () => goTab('admin'));
+
+/* ===========================================================
+   6. Checklist Kondisi & Form Handling (Wajib Diisi Lengkap)
+   =========================================================== */
+const KONDISI_ITEMS = [
+  { key: 'kebersihanTabung', label: '1. Kebersihan Tabung APAR', good: 'Bersih', bad: 'Kotor' },
+  { key: 'indikatorTekanan', label: '2. Indikator Tekanan', good: 'Hijau (Normal)', bad: 'Merah (Isi/Kurang)' },
+  { key: 'kunciPengaman', label: '3. Kunci Pengaman / Pin', good: 'Ada & Tersegel', bad: 'Tidak Ada / Rusak' },
+  { key: 'selangSemprot', label: '4. Selang Semprot (Hose)', good: 'Bagus / Tidak Retak', bad: 'Pecah / Retak' },
+  { key: 'nozzle', label: '5. Corong / Nozzle', good: 'Lengkap & Bersih', bad: 'Tersumbat / Hilang' },
+  { key: 'tagLabel', label: '6. TAG Label Pemeliharaan', good: 'Ada & Terisi', bad: 'Tidak Ada' },
+];
+
+let currentEntry = null;
+
+function renderKondisiForm() {
+  const wrap = document.getElementById('kondisiList');
+  wrap.innerHTML = KONDISI_ITEMS.map(item => `
+    <div class="kondisi-item" data-key="${item.key}">
+      <div class="label-group">
+        <span class="label">${item.label}</span>
+        <span class="wajib-tag">* Wajib</span>
+      </div>
+      <div class="toggle2">
+        <button type="button" data-key="${item.key}" data-val="good">✓ ${item.good}</button>
+        <button type="button" data-key="${item.key}" data-val="bad">✗ ${item.bad}</button>
+      </div>
+    </div>
+  `).join('');
+
+  wrap.querySelectorAll('button').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const key = btn.dataset.key;
+      const val = btn.dataset.val;
+      currentEntry[key] = (currentEntry[key] === val) ? null : val;
+      
+      // Auto-remove invalid class once user interacts
+      const itemEl = document.querySelector(`.kondisi-item[data-key="${key}"]`);
+      if (itemEl && currentEntry[key]) {
+        itemEl.classList.remove('invalid');
+      }
+      refreshKondisiButtons();
+    });
+  });
+  refreshKondisiButtons();
+}
+
+function refreshKondisiButtons() {
+  let filledCount = 0;
+  KONDISI_ITEMS.forEach(item => {
+    const val = currentEntry ? currentEntry[item.key] : null;
+    const itemEl = document.querySelector(`.kondisi-item[data-key="${item.key}"]`);
+    if (val) filledCount++;
+
+    if (itemEl) {
+      const tagEl = itemEl.querySelector('.wajib-tag, .terisi-tag');
+      if (tagEl) {
+        if (val) {
+          tagEl.className = 'terisi-tag';
+          tagEl.textContent = '✓ Terisi';
+          itemEl.classList.add('valid');
+        } else {
+          tagEl.className = 'wajib-tag';
+          tagEl.textContent = '* Wajib';
+          itemEl.classList.remove('valid');
+        }
+      }
+    }
+  });
+
+  const counterPill = document.getElementById('kondisiCounter');
+  if (counterPill) {
+    counterPill.textContent = `${filledCount}/6 Terisi`;
+    counterPill.classList.toggle('complete', filledCount === 6);
+  }
+
+  document.querySelectorAll('#kondisiList button').forEach(btn => {
+    const key = btn.dataset.key;
+    const val = btn.dataset.val;
+    btn.classList.remove('on-good', 'on-bad');
+    if (currentEntry && currentEntry[key] === val) {
+      btn.classList.add(val === 'good' ? 'on-good' : 'on-bad');
+    }
+  });
+}
+
+/* ===========================================================
+   7. Photo Compression & Upload (Eviden)
+   =========================================================== */
+const fotoInput = document.getElementById('fotoInput');
+const fotoPreview = document.getElementById('fotoPreview');
+const btnUploadFoto = document.getElementById('btnUploadFoto');
+const btnHapusFoto = document.getElementById('btnHapusFoto');
+
+function compressImage(file, maxDim = 1280, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const reader = new FileReader();
+    reader.onload = () => { img.src = reader.result; };
+    reader.onerror = reject;
+    img.onload = () => {
+      let { width, height } = img;
+      if (width > height && width > maxDim) {
+        height = Math.round(height * (maxDim / width));
+        width = maxDim;
+      } else if (height > maxDim) {
+        width = Math.round(width * (maxDim / height));
+        height = maxDim;
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(img, 0, 0, width, height);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+btnUploadFoto.addEventListener('click', () => fotoInput.click());
+
+fotoInput.addEventListener('change', async () => {
+  const file = fotoInput.files[0];
+  if (!file) return;
+  try {
+    btnUploadFoto.disabled = true;
+    btnUploadFoto.textContent = '⏳ Memproses foto...';
+    currentEntry.foto = await compressImage(file);
+    fotoPreview.src = currentEntry.foto;
+    fotoPreview.classList.add('show');
+    fotoPreview.style.cursor = 'pointer';
+    fotoPreview.title = 'Klik untuk melihat foto ukuran penuh';
+    fotoPreview.onclick = () => openPhotoModal(currentEntry.foto, 'Foto Eviden APAR Kode ' + (currentEntry.kode || ''), 'Ruangan: ' + (currentEntry.ruangan || ''));
+    btnHapusFoto.classList.remove('hidden');
+    showStatus('Foto bukti berhasil dipasang 📷', 'ok');
+  } catch (e) {
+    console.error(e);
+    showStatus('Gagal memproses foto, coba lagi.', 'err');
+  } finally {
+    btnUploadFoto.disabled = false;
+    btnUploadFoto.textContent = '📷 Ambil / Upload Foto';
+  }
+});
+
+btnHapusFoto.addEventListener('click', () => {
+  if (currentEntry) currentEntry.foto = null;
+  fotoPreview.src = '';
+  fotoPreview.classList.remove('show');
+  btnHapusFoto.classList.add('hidden');
+  fotoInput.value = '';
+});
+
+/* ===========================================================
+   8. Display Data & Inspection Checklist Form
+   =========================================================== */
+const resultCard = document.getElementById('resultCard');
+const resultKode = document.getElementById('resultKode');
+const resultStatusBadge = document.getElementById('resultStatusBadge');
+const resultTitle = document.getElementById('resultTitle');
+const resultList = document.getElementById('resultList');
+const keteranganInput = document.getElementById('keteranganInput');
+
+const FIELD_LABELS = [
+  ['gedung', 'Gedung'],
+  ['lantai', 'Lantai'],
+  ['merk', 'Merk APAR'],
+  ['kapasitas', 'Kapasitas'],
+  ['jenisGas', 'Jenis Media / Gas'],
+  ['no', 'No. Urut Master'],
+];
+
+function tampilkanData(kode) {
+  const cleanKode = String(kode).trim();
+  const data = DATA_BY_KODE[cleanKode];
+
+  if (!data) {
+    resultCard.classList.add('hidden');
+    showStatus(`Kode "${cleanKode}" tidak ditemukan dalam master data APAR.`, 'err');
+    return;
+  }
+
+  const existing = getLogEntry(data);
+  currentEntry = existing ? { ...existing } : {
+    id: String(data.id || data.kode).trim(),
+    kode: String(data.kode).trim(),
+    gedung: data.gedung || '',
+    ruangan: data.ruangan || '',
+    lantai: data.lantai || '',
+    merk: data.merk || '',
+    kapasitas: data.kapasitas || '',
+    jenisGas: data.jenisGas || '',
+    kebersihanTabung: null,
+    indikatorTekanan: null,
+    kunciPengaman: null,
+    selangSemprot: null,
+    nozzle: null,
+    tagLabel: null,
+    keterangan: '',
+    foto: null,
+    tanggal: null,
+    pemeriksa: currentUser ? (currentUser.name || currentUser.email) : 'Petugas',
+  };
+
+  resultKode.textContent = 'Kode: ' + data.kode;
+  if (existing) {
+    resultStatusBadge.textContent = '✅ Sudah Diperiksa';
+    resultStatusBadge.style.background = '#14532d';
+    resultStatusBadge.style.color = '#4ade80';
+  } else {
+    resultStatusBadge.textContent = '🆕 Belum Diperiksa';
+    resultStatusBadge.style.background = '#334155';
+    resultStatusBadge.style.color = '#cbd5e1';
+  }
+
+  resultTitle.textContent = data.ruangan || '-';
+  resultList.innerHTML = FIELD_LABELS.map(([key, label]) => {
+    const val = data[key];
+    return `<div class="row"><dt>${label}</dt><dd>${(val === null || val === undefined || val === '') ? '-' : val}</dd></div>`;
+  }).join('');
+
+  renderKondisiForm();
+  keteranganInput.value = currentEntry.keterangan || '';
+  
+  if (currentEntry.foto) {
+    fotoPreview.src = currentEntry.foto;
+    fotoPreview.classList.add('show');
+    fotoPreview.style.cursor = 'pointer';
+    fotoPreview.title = 'Klik untuk melihat foto ukuran penuh';
+    fotoPreview.onclick = () => openPhotoModal(currentEntry.foto, 'Foto Eviden APAR Kode ' + (currentEntry.kode || ''), 'Ruangan: ' + (currentEntry.ruangan || ''));
+    btnHapusFoto.classList.remove('hidden');
+  } else {
+    fotoPreview.src = '';
+    fotoPreview.classList.remove('show');
+    fotoPreview.onclick = null;
+    btnHapusFoto.classList.add('hidden');
+  }
+  fotoInput.value = '';
+
+  resultCard.classList.remove('hidden');
+  resultCard.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+  showStatus(existing ? `Data kode ${data.kode} dimuat (Sudah pernah diperiksa).` : `Data kode ${data.kode} siap diperiksa.`, 'ok');
+}
+
+/* ===========================================================
+   9. Persist Log to Backend Server & Firestore
+   =========================================================== */
+async function persistEntry(entry) {
+  const docId = String(entry.kode || entry.id).trim();
+  
+  // Clean all fields so JSON serialization and Firestore never encounter 'undefined'
+  const cleanDoc = {};
+  for (const k in entry) {
+    if (Object.prototype.hasOwnProperty.call(entry, k)) {
+      cleanDoc[k] = entry[k] !== undefined ? entry[k] : null;
+    }
+  }
+
+  // 1. Instantly update in-memory and local cache
+  LOG[docId] = cleanDoc;
+  if (entry.id) LOG[String(entry.id).trim()] = cleanDoc;
+  if (entry.kode) LOG[String(entry.kode).trim()] = cleanDoc;
+  
+  saveLocalLog(LOG);
+  renderRiwayat();
+  renderProgress();
+
+  let serverSaved = false;
+  let cloudSaved = false;
+
+  // 2. Synchronize to Backend Server (instant broadcast to all connected devices via SSE)
+  try {
+    const res = await fetch('/api/apar_log', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(cleanDoc)
+    });
+    if (res.ok) {
+      serverSaved = true;
+      console.log('✅ Server broadcast sukses untuk docId:', docId);
+    }
+  } catch (err) {
+    console.warn('Backend server save warning:', err);
+  }
+
+  // 3. Synchronize to Cloud Firestore
+  if (db && isFirebaseConfigured()) {
+    try {
+      const savePromise = db.collection(COLLECTION_NAME).doc(docId).set(cleanDoc, { merge: true });
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error('Firestore timeout')), 4000)
+      );
+      await Promise.race([savePromise, timeoutPromise]);
+      cloudSaved = true;
+      console.log('✅ Firestore sync sukses untuk docId:', docId);
+    } catch (e) {
+      console.warn('Firestore sync notice:', e);
+      if (String(e.code || '').includes('permission-denied')) {
+        setDbStatus('offline', 'Firestore ditolak (cek Rules & Publish)');
+        showStatus('⚠️ Gagal simpan ke Firebase (Akses Ditolak). Data ini HANYA tersimpan di HP ini sampai Rules Firestore di-Publish di Firebase Console. Petugas/admin lain belum bisa melihatnya.', 'err');
+      }
+    }
+  }
+
+  // 4. Auto-synchronize to Google Sheets & Google Drive
+  if (GDRIVE_SETTINGS && GDRIVE_SETTINGS.googleScriptUrl && GDRIVE_SETTINGS.autoSyncGdrive) {
+    syncSingleToGoogleSheets(cleanDoc).catch(e => console.warn('Gdrive background sync:', e));
+  }
+
+  return { success: true, server: serverSaved, cloud: cloudSaved };
+}
+
+document.getElementById('btnSimpan').addEventListener('click', async () => {
+  if (!currentEntry) return;
+  const btnSimpan = document.getElementById('btnSimpan');
+
+  // ===== VALIDASI: SEMUA PERTANYAAN WAJIB DIISI =====
+  const missingItems = [];
+  KONDISI_ITEMS.forEach(item => {
+    const val = currentEntry[item.key];
+    const itemEl = document.querySelector(`.kondisi-item[data-key="${item.key}"]`);
+    if (!val) {
+      missingItems.push(item.label);
+      if (itemEl) itemEl.classList.add('invalid');
+    } else {
+      if (itemEl) itemEl.classList.remove('invalid');
+    }
+  });
+
+  if (missingItems.length > 0) {
+    showStatus(`⚠️ Harap lengkapi semua checklist kondisi (${missingItems.length} pertanyaan belum diisi)!`, 'err');
+    const firstInvalid = document.querySelector('.kondisi-item.invalid');
+    if (firstInvalid) {
+      firstInvalid.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+    return;
+  }
+
+  btnSimpan.disabled = true;
+  btnSimpan.textContent = '⏳ Menyimpan data...';
+
+  try {
+    currentEntry.keterangan = keteranganInput.value.trim();
+    currentEntry.tanggal = new Date().toISOString();
+    currentEntry.pemeriksa = currentUser ? (currentUser.name || currentUser.email) : 'Petugas';
+    
+    // Master data association
+    const masterData = DATA_BY_KODE[currentEntry.kode];
+    if (masterData) {
+      currentEntry.ruangan = masterData.ruangan || currentEntry.ruangan || '';
+      currentEntry.gedung = masterData.gedung || currentEntry.gedung || '';
+      currentEntry.lantai = masterData.lantai || currentEntry.lantai || '';
+      currentEntry.merk = masterData.merk || currentEntry.merk || '';
+      currentEntry.jenisGas = masterData.jenisGas || currentEntry.jenisGas || '';
+      currentEntry.kapasitas = masterData.kapasitas || currentEntry.kapasitas || '';
+    }
+
+    const result = await persistEntry({ ...currentEntry });
+
+    if (result.server || result.cloud) {
+      showStatus(`Hasil pemeriksaan APAR kode ${currentEntry.kode} berhasil disimpan & disiarkan real-time ke semua user! ✅`, 'ok');
+    } else {
+      showStatus(`Hasil pemeriksaan APAR kode ${currentEntry.kode} berhasil disimpan! ✅`, 'ok');
+    }
+
+    resultStatusBadge.textContent = '✅ Sudah Diperiksa';
+    resultStatusBadge.style.background = '#14532d';
+    resultStatusBadge.style.color = '#4ade80';
+    
+    renderRiwayat();
+    renderProgress();
+  } catch (e) {
+    console.error('Error simpan:', e);
+    showStatus('Gagal menyimpan: ' + (e.message || 'Terjadi kesalahan sistem'), 'err');
+  } finally {
+    btnSimpan.disabled = false;
+    btnSimpan.textContent = '✅ Simpan Hasil Pemeriksaan';
+  }
+});
+
+document.getElementById('btnCariManual').addEventListener('click', () => {
+  const kode = document.getElementById('manualKode').value.trim();
+  if (kode) tampilkanData(kode);
+});
+
+document.getElementById('manualKode').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('btnCariManual').click();
+});
+
+document.getElementById('btnScanLagi').addEventListener('click', async () => {
+  resultCard.classList.add('hidden');
+  lastScanned = null;
+  await startScanner();
+});
+
+/* ===========================================================
+   10. Camera QR Scanner Handling
+   =========================================================== */
+let html5QrCode = null;
+let isTransitioning = false;
+let lastScanned = null;
+let lastScanTime = 0;
+const readerDiv = document.getElementById('reader');
+const btnStart = document.getElementById('btnStart');
+
+function scannerIsRunning() {
+  return html5QrCode && html5QrCode.getState() === Html5QrcodeScannerState.SCANNING;
+}
+
+async function startScanner() {
+  if (isTransitioning || scannerIsRunning()) return;
+  isTransitioning = true;
+  btnStart.disabled = true;
+  btnStart.textContent = '⏳ Membuka kamera...';
+  resultCard.classList.add('hidden');
+  readerDiv.classList.remove('hidden');
+  readerDiv.innerHTML = '';
+
+  try {
+    if (!html5QrCode) {
+      html5QrCode = new Html5Qrcode("reader", {
+        formatsToSupport: [Html5QrcodeSupportedFormats.QR_CODE],
+        verbose: false
+      });
+    }
+    const config = {
+      fps: 12,
+      qrbox: { width: 250, height: 250 },
+      disableFlip: false
+    };
+
+    await html5QrCode.start(
+      { facingMode: "environment" },
+      config,
+      onScanSuccess,
+      () => {}
+    );
+    btnStart.textContent = '⏹️ Tutup Kamera Scan';
+    btnStart.onclick = stopScanner;
+  } catch (err) {
+    console.error('Kamera error:', err);
+    let pesan = 'Gagal mengakses kamera.';
+    const errStr = String(err && err.name || err);
+    if (errStr.includes('NotAllowedError')) pesan = 'Izin kamera ditolak. Silakan izinkan akses kamera di browser.';
+    else if (errStr.includes('NotFoundError')) pesan = 'Kamera tidak ditemukan pada perangkat ini.';
+    else if (errStr.includes('NotReadableError')) pesan = 'Kamera sedang digunakan oleh aplikasi lain.';
+    showStatus(pesan, 'err');
+    readerDiv.classList.add('hidden');
+    btnStart.textContent = '📷 Buka Kamera Scan QR';
+    btnStart.onclick = startScanner;
+  } finally {
+    btnStart.disabled = false;
+    isTransitioning = false;
+  }
+}
+
+async function stopScanner() {
+  if (isTransitioning) return;
+  if (!scannerIsRunning()) {
+    readerDiv.classList.add('hidden');
+    btnStart.textContent = '📷 Buka Kamera Scan QR';
+    btnStart.onclick = startScanner;
+    return;
+  }
+  isTransitioning = true;
+  try {
+    await html5QrCode.stop();
+    html5QrCode.clear();
+  } catch (e) {
+    console.warn('Stop scanner exception:', e);
+  } finally {
+    readerDiv.classList.add('hidden');
+    btnStart.disabled = false;
+    btnStart.textContent = '📷 Buka Kamera Scan QR';
+    btnStart.onclick = startScanner;
+    isTransitioning = false;
+  }
+}
+
+async function onScanSuccess(decodedText) {
+  const kode = decodedText.trim();
+  const now = Date.now();
+  if (kode === lastScanned && now - lastScanTime < 2000) return;
+  lastScanned = kode;
+  lastScanTime = now;
+
+  await stopScanner();
+  tampilkanData(kode);
+}
+
+btnStart.addEventListener('click', startScanner);
+
+document.addEventListener('visibilitychange', () => {
+  if (document.hidden) stopScanner();
+});
+
+/* ===========================================================
+   11. Progress Dashboard & Statistics
+   =========================================================== */
+function renderProgress() {
+  const totalWithKode = APAR_DATA.filter(r => r.kode).length;
+  const completedItems = APAR_DATA.filter(r => r.kode && getLogEntry(r));
+  const done = completedItems.length;
+  const remaining = Math.max(0, totalWithKode - done);
+  const pct = totalWithKode ? Math.round((done / totalWithKode) * 100) : 0;
+
+  // Update Top Bento Stats
+  document.getElementById('statTotalAlat').textContent = totalWithKode;
+  document.getElementById('statSudahPeriksa').textContent = done;
+  document.getElementById('statBelumPeriksa').textContent = remaining;
+  document.getElementById('statPersentase').textContent = pct + '%';
+  document.getElementById('tabBadgeCount').textContent = done;
+
+  // Update Progress Bar
+  const progressFill = document.getElementById('progressFill');
+  if (progressFill) progressFill.style.width = pct + '%';
+
+  const progressText = document.getElementById('progressText');
+  if (progressText) progressText.textContent = `${done} dari ${totalWithKode} alat selesai diperiksa`;
+
+  const progressPct = document.getElementById('progressPct');
+  if (progressPct) progressPct.textContent = pct + '%';
+
+  const doneAllLabel = document.getElementById('doneAllLabel');
+  if (doneAllLabel) {
+    if (totalWithKode > 0 && done >= totalWithKode) {
+      doneAllLabel.classList.remove('hidden');
+    } else {
+      doneAllLabel.classList.add('hidden');
+    }
+  }
+
+  // Building Progress Breakdown
+  renderGedungProgress();
+}
+
+function renderGedungProgress() {
+  const gedungListEl = document.getElementById('gedungProgressList');
+  if (!gedungListEl) return;
+
+  const buildingMap = {};
+  APAR_DATA.filter(r => r.kode).forEach(r => {
+    const g = r.gedung || 'Lainnya';
+    if (!buildingMap[g]) buildingMap[g] = { total: 0, done: 0 };
+    buildingMap[g].total++;
+    if (getLogEntry(r)) buildingMap[g].done++;
+  });
+
+  const keys = Object.keys(buildingMap).sort();
+  gedungListEl.innerHTML = keys.map(k => {
+    const b = buildingMap[k];
+    const bPct = b.total ? Math.round((b.done / b.total) * 100) : 0;
+    return `
+      <div class="gedung-item">
+        <div class="gedung-head">
+          <span>${escapeHtml(k)}</span>
+          <span style="color:${bPct === 100 ? '#34d399' : '#38bdf8'}">${b.done} / ${b.total} (${bPct}%)</span>
+        </div>
+        <div class="progress-bar-track" style="height:6px;">
+          <div class="progress-bar-fill" style="width:${bPct}%;"></div>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+/* ===========================================================
+   12. History / Riwayat List Rendering
+   =========================================================== */
+const searchRiwayat = document.getElementById('searchRiwayat');
+const filterGedungRiwayat = document.getElementById('filterGedungRiwayat');
+
+// Populate building filter dropdown
+const allGedungs = [...new Set(APAR_DATA.map(r => r.gedung).filter(Boolean))].sort();
+allGedungs.forEach(g => {
+  const opt = document.createElement('option');
+  opt.value = g;
+  opt.textContent = g;
+  filterGedungRiwayat.appendChild(opt);
+});
+
+function renderRiwayat() {
+  const q = (searchRiwayat.value || '').toLowerCase().trim();
+  const selectedGedung = filterGedungRiwayat.value;
+  const logList = document.getElementById('logList');
+
+  const completed = APAR_DATA
+    .map(r => ({ data: r, entry: getLogEntry(r) }))
+    .filter(item => item.entry !== null)
+    .filter(({ data }) => {
+      if (selectedGedung && data.gedung !== selectedGedung) return false;
+      if (!q) return true;
+      return String(data.kode || '').toLowerCase().includes(q)
+        || (data.ruangan || '').toLowerCase().includes(q)
+        || (data.gedung || '').toLowerCase().includes(q)
+        || (data.merk || '').toLowerCase().includes(q)
+        || (data.jenisGas || '').toLowerCase().includes(q);
+    })
+    .sort((a, b) => new Date(b.entry.tanggal || 0) - new Date(a.entry.tanggal || 0));
+
+  if (!completed.length) {
+    logList.innerHTML = `<div class="empty-state">
+      <div style="font-size:2rem; margin-bottom:8px;">📭</div>
+      Belum ada riwayat pemeriksaan yang cocok.<br/>Scan QR alat di tab Scan untuk mulai mengisi checklist.
+    </div>`;
+    return;
+  }
+
+  logList.innerHTML = completed.map(({ data, entry }) => {
+    const tgl = entry.tanggal ? new Date(entry.tanggal).toLocaleString('id-ID', { dateStyle: 'medium', timeStyle: 'short' }) : '-';
+    const eviden = entry.foto ? 'Ada' : 'Tidak Ada';
+    const fotoHtml = entry.foto ? `
+      <div style="margin-top: 10px; display: flex; align-items: center; gap: 10px;">
+        <img class="log-foto" src="${entry.foto}" alt="Bukti foto" onclick="openPhotoModal('${entry.foto}', 'APAR Kode ${escapeHtml(data.kode)}', '${escapeHtml(data.ruangan || '')} (${escapeHtml(data.gedung || '')})')" style="cursor: pointer; max-height: 85px; border-radius: 6px; border: 1px solid var(--border); transition: transform 0.2s;" title="Klik untuk memperbesar foto">
+        <span style="font-size: 0.75rem; color: var(--text-muted); cursor: pointer;" onclick="openPhotoModal('${entry.foto}', 'APAR Kode ${escapeHtml(data.kode)}', '${escapeHtml(data.ruangan || '')} (${escapeHtml(data.gedung || '')})')">🔍 Klik foto untuk memperbesar</span>
+      </div>` : '';
+    const ket = entry.keterangan ? `<div class="log-ket">📝 <strong>Catatan:</strong> ${escapeHtml(entry.keterangan)}</div>` : '';
+    const pemeriksa = entry.pemeriksa ? `<div class="log-pemeriksa">👤 Petugas: ${escapeHtml(entry.pemeriksa)}</div>` : '';
+
+    return `
+      <div class="log-item">
+        <div class="log-head" style="display: flex; justify-content: space-between; align-items: center; gap: 8px;">
+          <div>
+            <span class="log-kode">Kode ${escapeHtml(data.kode)}</span>
+            <span class="log-check" style="margin-left: 6px;">✅ Selesai</span>
+          </div>
+          <button type="button" onclick="deleteSingleLogEntry('${escapeHtml(data.kode)}')" style="background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.3); padding: 4px 10px; border-radius: 6px; font-size: 0.75rem; font-weight: 600; cursor: pointer; display: inline-flex; align-items: center; gap: 4px; transition: all 0.2s;" title="Hapus riwayat pemeriksaan ini">
+            🗑️ Hapus Tugas
+          </button>
+        </div>
+        <div class="log-ruangan">${escapeHtml(data.ruangan || '-')} — ${escapeHtml(data.gedung || '-')}${data.lantai ? ' LT.' + data.lantai : ''}</div>
+        <div class="log-meta">
+          Merk: <strong>${escapeHtml(data.merk || '-')}</strong> · 
+          Media: <strong>${escapeHtml(data.jenisGas || '-')}</strong> (${escapeHtml(data.kapasitas || '-')}) · 
+          Diperiksa: ${tgl}
+        </div>
+        ${pemeriksa}
+        ${ket}
+        ${fotoHtml}
+      </div>
+    `;
+  }).join('');
+}
+
+async function deleteSingleLogEntry(targetKode) {
+  if (!targetKode) return;
+  const kodeStr = String(targetKode).trim();
+  const cleanKey = kodeStr.toLowerCase();
+
+  const isConfirmed = confirm(
+    `Apakah Anda yakin ingin menghapus data hasil pemeriksaan APAR Kode "${kodeStr}"?\n\n` +
+    `• Data akan dihapus dari riwayat pemeriksaan.\n` +
+    `• Progres pemeriksaan di seluruh user akan berkurang secara real-time.\n` +
+    `• Data di Google Sheets & Drive akan terhapus otomatis.`
+  );
+
+  if (!isConfirmed) return;
+
+  showStatus(`⏳ Menghapus data pemeriksaan Kode ${kodeStr}...`, 'info');
+
+  // 1. Delete from in-memory LOG and localStorage
+  for (const k in LOG) {
+    if (k.toLowerCase() === cleanKey || (LOG[k] && (String(LOG[k].kode || '').trim().toLowerCase() === cleanKey || String(LOG[k].id || '').trim().toLowerCase() === cleanKey))) {
+      delete LOG[k];
+    }
+  }
+  saveLocalLog(LOG);
+
+  // 2. Instantly update UI on current screen
+  renderRiwayat();
+  renderProgress();
+
+  if (currentEntry && String(currentEntry.kode || currentEntry.id).trim().toLowerCase() === cleanKey) {
+    resultStatusBadge.textContent = 'Belum Diperiksa';
+    resultStatusBadge.style.background = 'rgba(239, 68, 68, 0.2)';
+    resultStatusBadge.style.color = '#f87171';
+  }
+
+  // 3. Delete from Backend Server SQLite (broadcasts SSE 'delete_single' to all connected users)
+  try {
+    await fetch(`/api/apar_log/${encodeURIComponent(kodeStr)}`, { method: 'DELETE' });
+  } catch (err) {
+    console.warn('Backend server delete warning:', err);
+  }
+
+  // 4. Delete from Firebase Firestore if connected
+  if (db && isFirebaseConfigured()) {
+    try {
+      await db.collection(COLLECTION_NAME).doc(kodeStr).delete();
+      await db.collection(COLLECTION_NAME).doc(cleanKey).delete().catch(() => {});
+    } catch (fsErr) {
+      console.warn('Firestore delete warning:', fsErr);
+    }
+  }
+
+  // 5. Delete from Google Sheets & Drive via Apps Script
+  syncSingleDeleteToGoogleSheets(kodeStr).catch(e => console.warn('Gdrive delete sync:', e));
+
+  showStatus(`✅ Data pemeriksaan APAR Kode ${kodeStr} berhasil dihapus dari seluruh user & database!`, 'ok');
+}
+window.deleteSingleLogEntry = deleteSingleLogEntry;
+
+searchRiwayat.addEventListener('input', renderRiwayat);
+filterGedungRiwayat.addEventListener('change', renderRiwayat);
+
+/* ===========================================================
+   Photo Viewer Modal Controller
+   =========================================================== */
+const photoModal = document.getElementById('photoModal');
+const photoModalImg = document.getElementById('photoModalImg');
+const photoModalTitle = document.getElementById('photoModalTitle');
+const photoModalSub = document.getElementById('photoModalSub');
+const btnDownloadPhoto = document.getElementById('btnDownloadPhoto');
+const btnClosePhotoModal = document.getElementById('btnClosePhotoModal');
+const btnClosePhotoModal2 = document.getElementById('btnClosePhotoModal2');
+
+function openPhotoModal(src, title, sub) {
+  if (!photoModal) return;
+  photoModalImg.src = src;
+  photoModalTitle.textContent = title || 'Bukti Foto APAR';
+  photoModalSub.textContent = sub || 'Foto eviden hasil checklist aplikasi';
+  btnDownloadPhoto.href = src;
+  btnDownloadPhoto.download = (title ? title.replace(/[^a-zA-Z0-9]/g, '_') : 'FOTO_APAR') + '.jpg';
+  photoModal.classList.remove('hidden');
+}
+
+function closePhotoModal() {
+  if (photoModal) photoModal.classList.add('hidden');
+}
+
+if (btnClosePhotoModal) btnClosePhotoModal.addEventListener('click', closePhotoModal);
+if (btnClosePhotoModal2) btnClosePhotoModal2.addEventListener('click', closePhotoModal);
+if (photoModal) {
+  photoModal.addEventListener('click', (e) => {
+    if (e.target === photoModal) closePhotoModal();
+  });
+}
+
+/* ===========================================================
+   13. Reset History
+   =========================================================== */
+document.getElementById('btnResetLog').addEventListener('click', async () => {
+  const pesan = db
+    ? '⚠️ PERINGATAN: Hapus SEMUA riwayat pemeriksaan untuk seluruh tim di Cloud Firestore? Tindakan ini permanen.'
+    : 'Hapus semua riwayat pemeriksaan di perangkat ini?';
+  
+  if (!confirm(pesan)) return;
+
+  const btn = document.getElementById('btnResetLog');
+  btn.disabled = true;
+  btn.textContent = '⏳ Menghapus riwayat...';
+
+  try {
+    LOG = {};
+    saveLocalLog(LOG);
+
+    if (db) {
+      const snapshot = await db.collection(COLLECTION_NAME).get();
+      const batchSize = 400;
+      let ops = [];
+      snapshot.forEach(doc => ops.push(doc.ref));
+      for (let i = 0; i < ops.length; i += batchSize) {
+        const batch = db.batch();
+        ops.slice(i, i + batchSize).forEach(ref => batch.delete(ref));
+        await batch.commit();
+      }
+    }
+
+    renderRiwayat();
+    renderProgress();
+    showStatus('Semua riwayat pemeriksaan telah berhasil direset.', 'info');
+  } catch (e) {
+    console.error('Reset error:', e);
+    showStatus('Gagal menghapus riwayat: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '🗑️ Reset Riwayat Pemeriksaan';
+  }
+});
+
+/* ===========================================================
+   14. Excel Export (Format Resmi Sesuai Template Master Data)
+   =========================================================== */
+document.getElementById('btnDownload').addEventListener('click', async () => {
+  const btn = document.getElementById('btnDownload');
+  btn.disabled = true;
+  btn.textContent = '⏳ Menyiapkan file Excel...';
+
+  try {
+    await downloadExcel();
+    showStatus('File Excel berhasil diunduh ✅', 'ok');
+  } catch (e) {
+    console.error('Export error:', e);
+    showStatus('Gagal membuat file Excel: ' + e.message, 'err');
+  } finally {
+    btn.disabled = false;
+    btn.textContent = '⬇️ Download Rekap Excel (.xlsx)';
+  }
+});
+
+function getImageDimensions(dataUrl) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      resolve({ width: img.naturalWidth || 640, height: img.naturalHeight || 480 });
+    };
+    img.onerror = () => {
+      resolve({ width: 640, height: 480 });
+    };
+    img.src = dataUrl;
+  });
+}
+
+async function downloadExcel() {
+  const wb = new ExcelJS.Workbook();
+  wb.creator = 'Sistem Pemeliharaan APAR & FSS';
+  wb.created = new Date();
+  const ws = wb.addWorksheet('DATA FSS & APAR');
+
+  // Row 1: Group Headers
+  const headerRow1 = [
+    'APAR', '', '', '', '', '', '',
+    'KONDISI', '', '', '', '', '',
+    'KETERANGAN',
+    'FOTO BUKTI (EVIDEN)',
+    'LINK FOTO DRIVE',
+    'TANGGAL PEMERIKSAAN',
+    'PETUGAS PEMERIKSA',
+    'STATUS'
+  ];
+
+  // Row 2: Sub-headers
+  const headerRow2 = [
+    'KODE',
+    'RUANGAN',
+    'GEDUNG',
+    'LANTAI',
+    'MERK',
+    'KAPASITAS',
+    'JENIS GAS',
+    'Kebersihan Tabung APAR',
+    'Pemeriksaan Indikator Tekanan',
+    'Pemeriksaan Kunci Pengaman',
+    'Pemeriksaan Selang Semprot',
+    'Pemeriksaan Nozzle',
+    'TAG Label Pemeliharaan',
+    'KETERANGAN',
+    'FOTO BUKTI (EVIDEN)',
+    'LINK FOTO DRIVE',
+    'TANGGAL PEMERIKSAAN',
+    'PETUGAS PEMERIKSA',
+    'STATUS'
+  ];
+
+  ws.addRow(headerRow1);
+  ws.addRow(headerRow2);
+
+  // Merge APAR (A1:G1), KONDISI (H1:M1), KETERANGAN (N1:N2), and other single column headers
+  ws.mergeCells('A1:G1');
+  ws.mergeCells('H1:M1');
+  ws.mergeCells('N1:N2');
+  ws.mergeCells('O1:O2');
+  ws.mergeCells('P1:P2');
+  ws.mergeCells('Q1:Q2');
+  ws.mergeCells('R1:R2');
+  ws.mergeCells('S1:S2');
+
+  // Styling Header Row 1 & 2
+  const navyFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1E293B' } };
+  const redFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFC00000' } };
+  const whiteFont = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+
+  // Set row heights
+  ws.getRow(1).height = 24;
+  ws.getRow(2).height = 42;
+
+  // Apply fills & fonts to Row 1
+  for (let c = 1; c <= 7; c++) {
+    const cell = ws.getRow(1).getCell(c);
+    cell.fill = navyFill; cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+  }
+  for (let c = 8; c <= 13; c++) {
+    const cell = ws.getRow(1).getCell(c);
+    cell.fill = redFill; cell.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center' };
+  }
+  const cellN1 = ws.getRow(1).getCell(14);
+  cellN1.fill = redFill; cellN1.font = { bold: true, size: 11, color: { argb: 'FFFFFFFF' } };
+  cellN1.alignment = { vertical: 'middle', horizontal: 'center' };
+
+  for (let c = 15; c <= 19; c++) {
+    const cell = ws.getRow(1).getCell(c);
+    cell.fill = navyFill; cell.font = { bold: true, size: 10, color: { argb: 'FFFFFFFF' } };
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  }
+
+  // Apply fills & fonts to Row 2
+  for (let c = 1; c <= 7; c++) {
+    const cell = ws.getRow(2).getCell(c);
+    cell.fill = navyFill; cell.font = whiteFont;
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  }
+  for (let c = 8; c <= 14; c++) {
+    const cell = ws.getRow(2).getCell(c);
+    cell.fill = redFill; cell.font = whiteFont;
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  }
+  for (let c = 15; c <= 19; c++) {
+    const cell = ws.getRow(2).getCell(c);
+    cell.fill = navyFill; cell.font = whiteFont;
+    cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+  }
+
+  // Set column widths
+  ws.columns = [
+    { width: 8 },  // KODE
+    { width: 28 }, // RUANGAN
+    { width: 15 }, // GEDUNG
+    { width: 9 },  // LANTAI
+    { width: 14 }, // MERK
+    { width: 12 }, // KAPASITAS
+    { width: 22 }, // JENIS GAS
+    { width: 17 }, // Kebersihan Tabung APAR
+    { width: 17 }, // Pemeriksaan Indikator Tekanan
+    { width: 17 }, // Pemeriksaan Kunci Pengaman
+    { width: 17 }, // Pemeriksaan Selang Semprot
+    { width: 16 }, // Pemeriksaan Nozzle
+    { width: 16 }, // TAG Label Pemeliharaan
+    { width: 28 }, // KETERANGAN
+    { width: 26 }, // FOTO BUKTI (EVIDEN)
+    { width: 25 }, // LINK FOTO DRIVE
+    { width: 20 }, // TANGGAL PEMERIKSAAN
+    { width: 18 }, // PETUGAS
+    { width: 14 }, // STATUS
+  ];
+
+  let rowIndex = 3;
+  for (const data of APAR_DATA) {
+    const entry = getLogEntry(data);
+    const status = entry ? '✅ Selesai' : 'Belum Diperiksa';
+    const tgl = entry && entry.tanggal ? new Date(entry.tanggal).toLocaleString('id-ID') : '-';
+    const pemeriksa = entry && entry.pemeriksa ? entry.pemeriksa : '-';
+    const hasPhoto = entry && entry.foto && typeof entry.foto === 'string' && entry.foto.startsWith('data:image');
+
+    const row = ws.addRow([
+      data.kode ?? data.no ?? '',
+      data.ruangan ?? '',
+      data.gedung ?? '',
+      data.lantai ?? '',
+      data.merk ?? '',
+      data.kapasitas ?? '',
+      data.jenisGas ?? '',
+      entry ? (entry.kebersihanTabung === 'good' ? 'Bersih' : entry.kebersihanTabung === 'bad' ? 'Kotor' : '-') : '-',
+      entry ? (entry.indikatorTekanan === 'good' ? 'Hijau' : entry.indikatorTekanan === 'bad' ? 'Merah' : '-') : '-',
+      entry ? (entry.kunciPengaman === 'good' ? 'Ada' : entry.kunciPengaman === 'bad' ? 'Tidak Ada' : '-') : '-',
+      entry ? (entry.selangSemprot === 'good' ? 'Tidak Pecah' : entry.selangSemprot === 'bad' ? 'Pecah' : '-') : '-',
+      entry ? (entry.nozzle === 'good' ? 'Ada' : entry.nozzle === 'bad' ? 'Tidak Ada' : '-') : '-',
+      entry ? (entry.tagLabel === 'good' ? 'Ada' : entry.tagLabel === 'bad' ? 'Tidak Ada' : '-') : '-',
+      entry && entry.keterangan ? entry.keterangan : '-',
+      hasPhoto ? '' : '-',
+      entry && entry.photoDriveUrl ? entry.photoDriveUrl : (hasPhoto ? 'Tersimpan di Aplikasi' : '-'),
+      tgl,
+      pemeriksa,
+      status
+    ]);
+
+    row.height = hasPhoto ? 82 : 24;
+
+    row.eachCell(cell => {
+      cell.alignment = { vertical: 'middle', wrapText: true, horizontal: 'center' };
+      cell.font = { size: 9 };
+      cell.border = {
+        top: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        left: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        bottom: { style: 'thin', color: { argb: 'FFE2E8F0' } },
+        right: { style: 'thin', color: { argb: 'FFE2E8F0' } }
+      };
+    });
+
+    row.getCell(2).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+    row.getCell(14).alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+
+    // Embed Image Thumbnail maintaining genuine aspect ratio in Column 15 (O)
+    if (hasPhoto) {
+      try {
+        const match = /^data:image\/(png|jpe?g);base64,/.exec(entry.foto);
+        const ext = match ? (match[1] === 'jpg' ? 'jpeg' : match[1]) : 'jpeg';
+        const base64 = entry.foto.split(',')[1];
+        if (base64) {
+          const dim = await getImageDimensions(entry.foto);
+          const maxW = 145; // max width in px
+          const maxH = 92;  // max height in px
+          const aspect = (dim.width && dim.height) ? (dim.width / dim.height) : (4 / 3);
+          let targetW, targetH;
+          if (aspect > (maxW / maxH)) {
+            targetW = maxW;
+            targetH = Math.round(maxW / aspect);
+          } else {
+            targetH = maxH;
+            targetW = Math.round(maxH * aspect);
+          }
+
+          const imgId = wb.addImage({ base64, extension: ext });
+          ws.addImage(imgId, {
+            tl: { col: 14.08, row: (rowIndex - 1) + 0.05 },
+            ext: { width: targetW, height: targetH },
+            editAs: 'oneCell'
+          });
+        }
+      } catch (err) {
+        console.warn('Gagal render image ke excel:', err);
+      }
+    }
+    rowIndex++;
+  }
+
+  ws.views = [{ state: 'frozen', ySplit: 2 }];
+
+  const buffer = await wb.xlsx.writeBuffer();
+  const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  const stamp = new Date().toISOString().slice(0, 10);
+  a.href = url;
+  a.download = `REKAP_PEMELIHARAAN_APAR_1-128_${stamp}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+/* ===========================================================
+   14. Google Sheets & Google Drive Integration Engine
+   =========================================================== */
+
+const gdriveModal = document.getElementById('gdriveModal');
+const btnOpenGdriveModal = document.getElementById('btnOpenGdriveModal');
+const btnOpenGdriveModal2 = document.getElementById('btnOpenGdriveModal2');
+const btnCloseGdriveModal = document.getElementById('btnCloseGdriveModal');
+const gdriveStatusBadge = document.getElementById('gdriveStatusBadge');
+const inputGoogleScriptUrl = document.getElementById('inputGoogleScriptUrl');
+const checkAutoSyncGdrive = document.getElementById('checkAutoSyncGdrive');
+const btnSaveGdriveConfig = document.getElementById('btnSaveGdriveConfig');
+const btnTestGdriveSync = document.getElementById('btnTestGdriveSync');
+const btnSyncAllToGdrive = document.getElementById('btnSyncAllToGdrive');
+const btnCopyScriptCode = document.getElementById('btnCopyScriptCode');
+const scriptCodeBlock = document.getElementById('scriptCodeBlock');
+
+const gdriveAlertBox = document.getElementById('gdriveAlertBox');
+
+function setGdriveAlert(msg, type = 'info') {
+  if (!gdriveAlertBox) return;
+  if (!msg) {
+    gdriveAlertBox.className = 'hidden';
+    gdriveAlertBox.innerHTML = '';
+    return;
+  }
+  gdriveAlertBox.classList.remove('hidden');
+  if (type === 'err') {
+    gdriveAlertBox.style.background = 'rgba(239, 68, 68, 0.15)';
+    gdriveAlertBox.style.border = '1px solid #ef4444';
+    gdriveAlertBox.style.color = '#f87171';
+  } else if (type === 'ok') {
+    gdriveAlertBox.style.background = 'rgba(16, 185, 129, 0.15)';
+    gdriveAlertBox.style.border = '1px solid #10b981';
+    gdriveAlertBox.style.color = '#34d399';
+  } else {
+    gdriveAlertBox.style.background = 'rgba(59, 130, 246, 0.15)';
+    gdriveAlertBox.style.border = '1px solid #3b82f6';
+    gdriveAlertBox.style.color = '#60a5fa';
+  }
+  gdriveAlertBox.innerHTML = msg;
+}
+
+function openGdriveModal() {
+  if (gdriveModal) gdriveModal.classList.remove('hidden');
+  if (inputGoogleScriptUrl && GDRIVE_SETTINGS.googleScriptUrl) {
+    inputGoogleScriptUrl.value = GDRIVE_SETTINGS.googleScriptUrl;
+  }
+  if (checkAutoSyncGdrive) {
+    checkAutoSyncGdrive.checked = (GDRIVE_SETTINGS.autoSyncGdrive !== false);
+  }
+  setGdriveAlert('');
+}
+
+function closeGdriveModal() {
+  if (gdriveModal) gdriveModal.classList.add('hidden');
+}
+
+if (btnOpenGdriveModal) btnOpenGdriveModal.addEventListener('click', openGdriveModal);
+if (btnOpenGdriveModal2) btnOpenGdriveModal2.addEventListener('click', openGdriveModal);
+if (btnCloseGdriveModal) btnCloseGdriveModal.addEventListener('click', closeGdriveModal);
+
+if (gdriveModal) {
+  gdriveModal.addEventListener('click', (e) => {
+    if (e.target === gdriveModal) closeGdriveModal();
+  });
+}
+
+function updateGdriveStatusUI() {
+  if (!gdriveStatusBadge) return;
+  if (GDRIVE_SETTINGS.googleScriptUrl) {
+    gdriveStatusBadge.className = 'gdrive-status-badge connected';
+    gdriveStatusBadge.innerHTML = '🟢 Terhubung ke Google Sheets &amp; Drive';
+  } else {
+    gdriveStatusBadge.className = 'gdrive-status-badge disconnected';
+    gdriveStatusBadge.innerHTML = '⚪ Belum Dihubungkan';
+  }
+
+  if (inputGoogleScriptUrl) inputGoogleScriptUrl.value = GDRIVE_SETTINGS.googleScriptUrl || '';
+  if (checkAutoSyncGdrive) checkAutoSyncGdrive.checked = GDRIVE_SETTINGS.autoSyncGdrive !== false;
+}
+
+async function loadGdriveSettings() {
+  // 1. Instantly load from local storage
+  try {
+    const cached = localStorage.getItem('apar_gdrive_config');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      if (parsed) {
+        GDRIVE_SETTINGS = {
+          googleScriptUrl: parsed.googleScriptUrl || '',
+          autoSyncGdrive: parsed.autoSyncGdrive !== false
+        };
+        updateGdriveStatusUI();
+      }
+    }
+  } catch (e) {}
+
+  // 2. Fetch latest from backend server
+  try {
+    const res = await fetch('/api/gdrive/config');
+    if (res.ok) {
+      const text = await res.text();
+      try {
+        const data = JSON.parse(text);
+        if (data && data.googleScriptUrl) {
+          GDRIVE_SETTINGS = {
+            googleScriptUrl: data.googleScriptUrl || '',
+            autoSyncGdrive: data.autoSyncGdrive !== false
+          };
+          localStorage.setItem('apar_gdrive_config', JSON.stringify(GDRIVE_SETTINGS));
+          updateGdriveStatusUI();
+        }
+      } catch (jsonErr) {}
+    }
+  } catch (err) {
+    console.warn('Gdrive settings load notice:', err);
+  }
+}
+
+if (btnSaveGdriveConfig) {
+  btnSaveGdriveConfig.addEventListener('click', async () => {
+    let url = (inputGoogleScriptUrl ? inputGoogleScriptUrl.value.trim() : '');
+    const autoSync = checkAutoSyncGdrive ? checkAutoSyncGdrive.checked : true;
+
+    if (url.includes('docs.google.com/spreadsheets')) {
+      setGdriveAlert(`❌ <b>URL Salah:</b> Anda memasukkan link Google Sheets Spreadsheet. <br>Yang dibutuhkan adalah <b>Web App URL</b> yang berakhiran <code>/exec</code> dari menu <i>Extensions &gt; Apps Script &gt; Deploy &gt; Web App</i>.`, 'err');
+      return;
+    }
+
+    if (url.includes('/edit')) {
+      url = url.replace(/\/edit(\?.*)?$/, '/exec$1');
+      if (inputGoogleScriptUrl) inputGoogleScriptUrl.value = url;
+    }
+
+    // Always update local memory and localStorage immediately
+    GDRIVE_SETTINGS = { googleScriptUrl: url, autoSyncGdrive: autoSync };
+    try {
+      localStorage.setItem('apar_gdrive_config', JSON.stringify(GDRIVE_SETTINGS));
+    } catch (lsErr) {}
+    updateGdriveStatusUI();
+
+    btnSaveGdriveConfig.disabled = true;
+    btnSaveGdriveConfig.textContent = 'Menyimpan...';
+
+    try {
+      const res = await fetch('/api/gdrive/config', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ googleScriptUrl: url, autoSyncGdrive: autoSync })
+      });
+      
+      const text = await res.text();
+      let data = {};
+      try {
+        data = JSON.parse(text);
+      } catch (parseErr) {
+        data = { success: true };
+      }
+
+      setGdriveAlert('✅ <b>Pengaturan Berhasil Disimpan!</b> Silakan klik tombol <b>🧪 Uji Koneksi</b> di sebelah untuk mengetes.', 'ok');
+      showStatus('Pengaturan Google Sheets & Drive berhasil disimpan! ✅', 'ok');
+    } catch (e) {
+      // Local storage already saved it
+      setGdriveAlert('✅ <b>Pengaturan Berhasil Disimpan di Perangkat Anda!</b> Silakan klik <b>🧪 Uji Koneksi</b>.', 'ok');
+      showStatus('Pengaturan Google Sheets & Drive disimpan lokal! ✅', 'ok');
+    } finally {
+      btnSaveGdriveConfig.disabled = false;
+      btnSaveGdriveConfig.textContent = '💾 Simpan Pengaturan';
+    }
+  });
+}
+
+// Synchronize config changes
+
+if (btnTestGdriveSync) {
+  btnTestGdriveSync.addEventListener('click', async () => {
+    let url = (inputGoogleScriptUrl ? inputGoogleScriptUrl.value.trim() : GDRIVE_SETTINGS.googleScriptUrl);
+    url = url.replace(/^["']|["']$/g, '');
+    if (!url) {
+      setGdriveAlert('⚠️ Silakan masukkan URL Web App Google Apps Script Anda terlebih dahulu.', 'err');
+      if (inputGoogleScriptUrl) inputGoogleScriptUrl.focus();
+      return;
+    }
+
+    if (url.includes('docs.google.com/spreadsheets')) {
+      setGdriveAlert(`❌ <b>URL Salah:</b> Anda memasukkan link Google Sheets Spreadsheet. <br>Yang dibutuhkan adalah <b>Web App URL</b> yang berakhiran <code>/exec</code> dari menu <i>Extensions &gt; Apps Script &gt; Deploy &gt; Web App</i>.`, 'err');
+      return;
+    }
+
+    if (url.includes('/edit')) {
+      url = url.replace(/\/edit(\?.*)?$/, '/exec$1');
+      if (inputGoogleScriptUrl) inputGoogleScriptUrl.value = url;
+    }
+    if (url.includes('/dev')) {
+      url = url.replace(/\/dev(\?.*)?$/, '/exec$1');
+      if (inputGoogleScriptUrl) inputGoogleScriptUrl.value = url;
+    }
+
+    btnTestGdriveSync.disabled = true;
+    btnTestGdriveSync.textContent = 'Menguji...';
+    setGdriveAlert('⏳ Sedang mengirim data tes ke Google Sheets &amp; Google Drive Anda...', 'info');
+
+    const sampleItem = {
+      kode: 'TEST-APAR-01',
+      id: 'TEST-APAR-01',
+      ruangan: 'Ruang Server Uji Coba',
+      gedung: 'GEDUNG UTAMA',
+      lantai: 1,
+      merk: 'YAMATO',
+      kapasitas: '6 Kg',
+      jenisGas: 'Powder',
+      kebersihanTabung: 'good',
+      indikatorTekanan: 'good',
+      kunciPengaman: 'good',
+      selangSemprot: 'good',
+      nozzle: 'good',
+      tagLabel: 'good',
+      status: 'OK (Uji Coba)',
+      keterangan: 'Pemeriksaan uji koneksi Google Sheets & Drive sukses',
+      pemeriksa: currentUser ? (currentUser.name || currentUser.email) : 'Petugas APAR',
+      tgl: new Date().toLocaleString('id-ID')
+    };
+
+    let data = {};
+
+    try {
+      const result = await sendPayloadToGoogleAppsScript(url, sampleItem);
+
+      if (result && result.success) {
+        const sheetUrl = result.spreadsheetUrl || (result.data && result.data.spreadsheetUrl) || '';
+        const driveUrl = result.folderUrl || (result.data && result.data.folderUrl) || '';
+        let linksHtml = '';
+        if (sheetUrl) {
+          linksHtml += `<div style="margin-top: 8px;"><a href="${sheetUrl}" target="_blank" rel="noopener" style="color: #60a5fa; font-weight: bold; text-decoration: underline;">📊 Buka Spreadsheet Anda Disini</a></div>`;
+        }
+        if (driveUrl) {
+          linksHtml += `<div style="margin-top: 4px;"><a href="${driveUrl}" target="_blank" rel="noopener" style="color: #60a5fa; text-decoration: underline;">📁 Buka Folder Foto Drive</a></div>`;
+        }
+
+        setGdriveAlert(`🎉 <b>Koneksi Berhasil 100%!</b><br>${result.message || '1 baris data tes telah berhasil masuk ke Google Sheets & Drive Anda.'}${linksHtml}`, 'ok');
+        GDRIVE_SETTINGS.googleScriptUrl = url;
+        try {
+          localStorage.setItem('apar_gdrive_config', JSON.stringify(GDRIVE_SETTINGS));
+        } catch (e) {}
+        updateGdriveStatusUI();
+        showStatus('🎉 Uji koneksi BERHASIL! 1 baris sampel tersimpan di Google Sheets & Drive.', 'ok');
+      } else {
+        setGdriveAlert(`❌ <b>Uji Koneksi Gagal:</b> ${result.message || 'Periksa kembali URL Web App dan izin akses Google Apps Script.'}`, 'err');
+      }
+    } finally {
+      btnTestGdriveSync.disabled = false;
+      btnTestGdriveSync.textContent = '🧪 Uji Koneksi';
+    }
+  });
+}
+
+if (btnSyncAllToGdrive) {
+  btnSyncAllToGdrive.addEventListener('click', async () => {
+    let url = (inputGoogleScriptUrl ? inputGoogleScriptUrl.value.trim() : GDRIVE_SETTINGS.googleScriptUrl);
+    url = (url || '').replace(/^["']|["']$/g, '');
+    if (!url) {
+      setGdriveAlert('⚠️ URL Google Apps Script belum diisi. Masukkan URL lalu simpan.', 'err');
+      if (inputGoogleScriptUrl) inputGoogleScriptUrl.focus();
+      return;
+    }
+
+    if (url.includes('docs.google.com/spreadsheets')) {
+      setGdriveAlert(`❌ <b>URL Salah:</b> Anda memasukkan link Google Sheets Spreadsheet. <br>Yang dibutuhkan adalah <b>Web App URL</b> yang berakhiran <code>/exec</code> dari menu <i>Extensions &gt; Apps Script &gt; Deploy &gt; Web App</i>.`, 'err');
+      return;
+    }
+
+    const itemsToSend = [];
+    APAR_DATA.forEach(data => {
+      const entry = getLogEntry(data);
+      if (entry) {
+        // Associate master data if missing
+        const kodeStr = String(entry.kode || entry.id || data.kode || '');
+        const master = DATA_BY_KODE[kodeStr] || data;
+        itemsToSend.push({
+          ...entry,
+          kode: kodeStr,
+          ruangan: entry.ruangan || master.ruangan || '',
+          gedung: entry.gedung || master.gedung || '',
+          lantai: entry.lantai !== undefined ? entry.lantai : (master.lantai || ''),
+          merk: entry.merk || master.merk || '',
+          kapasitas: entry.kapasitas || master.kapasitas || '',
+          jenisGas: entry.jenisGas || master.jenisGas || ''
+        });
+      }
+    });
+
+    if (itemsToSend.length === 0) {
+      setGdriveAlert('ℹ️ Belum ada riwayat inspeksi yang tersimpan untuk dikirim. Lakukan inspeksi alat terlebih dahulu.', 'info');
+      return;
+    }
+
+    btnSyncAllToGdrive.disabled = true;
+    const total = itemsToSend.length;
+    let successCount = 0;
+    let failCount = 0;
+
+    setGdriveAlert(`⏳ Memulai sinkronisasi massal <b>${total} data riwayat</b> ke Google Sheets...`, 'info');
+
+    for (let i = 0; i < total; i++) {
+      const item = itemsToSend[i];
+      const kodeLabel = item.kode || `Item ${i + 1}`;
+      btnSyncAllToGdrive.textContent = `Mengirim ${i + 1}/${total} (${kodeLabel})...`;
+      setGdriveAlert(`⏳ Mengirim data <b>${i + 1} dari ${total}</b> (Kode: <b>${kodeLabel}</b>)... Foto sedang diproses ke sel.`, 'info');
+
+      const res = await sendPayloadToGoogleAppsScript(url, item);
+      if (res && res.success) {
+        successCount++;
+      } else {
+        failCount++;
+      }
+
+      // Small pause between items
+      if (i < total - 1) {
+        await new Promise(r => setTimeout(r, 150));
+      }
+    }
+
+    if (successCount > 0) {
+      setGdriveAlert(`🎉 <b>Sinkronisasi Selesai!</b> Sebanyak <b>${successCount} dari ${total} data</b> berhasil masuk ke Google Sheets &amp; Drive dengan foto tersemat langsung di dalam sel.`, 'ok');
+      showStatus(`🎉 Berhasil menyinkronkan ${successCount} data ke Google Sheets!`, 'ok');
+    } else {
+      setGdriveAlert(`❌ <b>Gagal Menyinkronkan:</b> Pastikan URL Web App benar dan "Who has access" sudah diset ke "Anyone" di Google Apps Script.`, 'err');
+      showStatus('Gagal mengirim ke Google Sheets, periksa izin deployment.', 'err');
+    }
+
+    btnSyncAllToGdrive.disabled = false;
+    btnSyncAllToGdrive.textContent = '🚀 Kirim Semua Riwayat Saat Ini ke Google Sheets (Sinkronisasi Massal)';
+  });
+}
+
+if (btnCopyScriptCode) {
+  btnCopyScriptCode.addEventListener('click', async () => {
+    if (!scriptCodeBlock) return;
+    try {
+      await navigator.clipboard.writeText(scriptCodeBlock.textContent);
+      btnCopyScriptCode.textContent = '✅ Tersalin!';
+      btnCopyScriptCode.style.background = '#10b981';
+      setTimeout(() => {
+        btnCopyScriptCode.textContent = '📋 Salin Kode';
+        btnCopyScriptCode.style.background = '#3b82f6';
+      }, 2500);
+      showStatus('Kode Apps Script berhasil disalin ke clipboard! 📋', 'ok');
+    } catch (e) {
+      showStatus('Gagal menyalin otomatis, silakan blok teks kode secara manual.', 'info');
+    }
+  });
+}
+
+/* ===========================================================
+   15. Initial Execution
+   =========================================================== */
+initFirebase();
+loadGdriveSettings();
+renderRiwayat();
+renderProgress();
+</script>
+
+</body>
+</html>

@@ -1,0 +1,10 @@
+{
+  "name": "My APAR",
+  "description": "Aplikasi My APAR untuk scan QR, pemeliharaan, dan inspeksi K3 bulanan.",
+  "requestFramePermissions": [
+    "camera"
+  ],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
